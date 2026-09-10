@@ -1,21 +1,37 @@
-import { useTranslation } from "react-i18next";
+import { Navbar } from "@/components/site/Navbar";
+import { Hero } from "@/components/site/Hero";
+import { About } from "@/components/site/About";
+import { Services } from "@/components/site/Services";
+import { BeforeAfter } from "@/components/site/BeforeAfter";
+import { ColorTools } from "@/components/site/ColorTools";
+import { Gallery } from "@/components/site/Gallery";
+import { Process } from "@/components/site/Process";
+import { Testimonials } from "@/components/site/Testimonials";
+import { ServiceArea } from "@/components/site/ServiceArea";
+import { Faq } from "@/components/site/Faq";
+import { Contact } from "@/components/site/Contact";
+import { Footer } from "@/components/site/Footer";
+import { FloatingWhatsApp } from "@/components/site/FloatingWhatsApp";
 
 const Index = () => {
-  const { t } = useTranslation();
-
   return (
-    <div className="relative flex h-full w-full flex-col bg-gradient-to-b from-[#4E54C8] to-[#A8C0FF] p-[32px] max-md:pb-[32px] max-md:pl-[20px] max-md:pr-[20px] max-md:pt-[32px]">
-      <div className="text-[26px] text-white max-md:text-[22px]">
-        {t("common.appName")}
-      </div>
-      <div className="flex h-full flex-1 flex-col items-center justify-center">
-        <div className="text-center text-[48px] text-white max-md:text-[26px]">
-          {t("home.hero.title")}
-        </div>
-        <div className="text-center text-[24px] text-white max-md:text-[16px]">
-          {t("home.hero.subtitle")}
-        </div>
-      </div>
+    <div className="min-h-full w-full">
+      <Navbar />
+      <main>
+        <Hero />
+        <About />
+        <Services />
+        <BeforeAfter />
+        <ColorTools />
+        <Gallery />
+        <Process />
+        <Testimonials />
+        <ServiceArea />
+        <Faq />
+        <Contact />
+      </main>
+      <Footer />
+      <FloatingWhatsApp />
     </div>
   );
 };

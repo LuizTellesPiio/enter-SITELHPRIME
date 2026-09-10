@@ -1,93 +1,84 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Light surfaces */
+    --background: 258 45% 99%;
+    --foreground: 260 38% 14%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 260 38% 14%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 260 38% 14%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Deep ink purple — brand primary */
+    --primary: 262 60% 14%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 260 35% 93%;
+    --secondary-foreground: 262 55% 18%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 260 30% 95%;
+    --muted-foreground: 258 18% 45%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 260 35% 93%;
+    --accent-foreground: 262 55% 18%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 258 22% 88%;
+    --input: 258 22% 86%;
+    --ring: 262 60% 30%;
 
-    --radius: 0.5rem;
+    /* Emerald green — action color */
+    --emerald: 150 70% 38%;
+    --emerald-foreground: 0 0% 100%;
+    --emerald-hover: 150 72% 32%;
+
+    --radius: 0.75rem;
 
     --sidebar-background: 0 0% 98%;
-
     --sidebar-foreground: 240 5.3% 26.1%;
-
     --sidebar-primary: 240 5.9% 10%;
-
     --sidebar-primary-foreground: 0 0% 98%;
-
     --sidebar-accent: 240 4.8% 95.9%;
-
     --sidebar-accent-foreground: 240 5.9% 10%;
-
     --sidebar-border: 220 13% 91%;
-
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    --background: 262 55% 7%;
+    --foreground: 258 50% 96%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 262 48% 11%;
+    --card-foreground: 258 50% 96%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 262 48% 11%;
+    --popover-foreground: 258 50% 96%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 258 45% 94%;
+    --primary-foreground: 262 55% 14%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 262 35% 18%;
+    --secondary-foreground: 258 50% 96%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 262 35% 18%;
+    --muted-foreground: 258 25% 70%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 262 35% 18%;
+    --accent-foreground: 258 50% 96%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --border: 262 30% 22%;
+    --input: 262 30% 24%;
+    --ring: 150 70% 45%;
   }
 }
 
@@ -96,8 +87,19 @@
     @apply border-border;
   }
 
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: "Sora", ui-sans-serif, system-ui, sans-serif;
   }
 }
 
@@ -106,4 +108,50 @@ body,
 #root {
   width: 100%;
   height: 100%;
+}
+
+@layer utilities {
+  /* Gradient backgrounds */
+  .gradient-hero {
+    background-image: linear-gradient(
+      160deg,
+      hsl(262 62% 11%) 0%,
+      hsl(263 55% 17%) 48%,
+      hsl(264 48% 24%) 100%
+    );
+  }
+
+  .gradient-ink {
+    background-image: linear-gradient(180deg, hsl(262 62% 11%) 0%, hsl(263 55% 17%) 100%);
+  }
+
+  .gradient-emerald {
+    background-image: linear-gradient(135deg, hsl(150 70% 38%) 0%, hsl(158 72% 32%) 100%);
+  }
+
+  .gradient-mist {
+    background-image: linear-gradient(180deg, hsl(258 45% 99%) 0%, hsl(260 40% 96%) 100%);
+  }
+
+  /* Text helper for dark sections */
+  .text-on-dark {
+    color: hsl(258 45% 92%);
+  }
+
+  .text-on-dark-muted {
+    color: hsl(258 35% 82%);
+  }
+
+  /* Shadows */
+  .shadow-elegant {
+    box-shadow: 0 20px 50px -20px hsl(262 60% 14% / 0.35);
+  }
+
+  .shadow-glow {
+    box-shadow: 0 0 40px -8px hsl(150 70% 38% / 0.45);
+  }
+
+  .shadow-card {
+    box-shadow: 0 10px 30px -12px hsl(262 50% 20% / 0.12);
+  }
 }
