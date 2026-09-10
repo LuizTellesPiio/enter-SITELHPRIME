@@ -1,16 +1,12 @@
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Award,
-  BadgeCheck,
-  BadgePercent,
-  Flame,
-  Handshake,
+  Info,
   Instagram,
-  Layers,
+  Loader2,
+  Lock,
   MessageCircle,
-  PaintBucket,
-  PaintRoller,
   Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -25,7 +21,14 @@ import {
 import { SectionHeader } from "@/components/site/SectionHeader";
 import { ImagePlaceholder } from "@/components/site/ImagePlaceholder";
 import { ContactForm } from "@/components/site/ContactForm";
-import { INSTAGRAM_URL, INSTAGRAM_HANDLE } from "@/data/site";
+import { RouletteWheel } from "@/components/site/RouletteWheel";
+import {
+  CAMPAIGN_PRIZES,
+  enabledPrizes,
+  type Participation,
+  type SpinPhase,
+} from "@/data/campaign";
+import { INSTAGRAM_HANDLE, INSTAGRAM_URL } from "@/data/site";
 import { buildWhatsAppLink } from "@/lib/whatsapp";
 
 /* ------------------------------------------------------------------ */
@@ -52,80 +55,49 @@ const getSource = (): string | null => {
 };
 
 const campaignLink = (source: string | null): string =>
-  buildWhatsAppLink(source ? `${CAMPAIGN_INTRO}\n\nOrigem: ${source}` : CAMPAIGN_INTRO);
+  source
+    ? buildWhatsAppLink(
+        `Olá! Vim pela campanha Cliente Premiado da LH Prime e gostaria de solicitar um orçamento.
+
+Origem: ${source}`,
+      )
+    : buildWhatsAppLink(CAMPAIGN_INTRO);
+
+const buildResultLink = (code: string, prize: string): string =>
+  buildWhatsAppLink(
+    `Olá! Participei do Cliente Premiado LH Prime.
+
+Código: ${code}
+Resultado: ${prize}
+
+Gostaria de receber as orientações.`,
+  );
 
 const STEPS = [
   {
     number: "01",
-    title: "Solicite seu orçamento",
-    text: "Conte para a LH Prime o que você deseja transformar.",
+    title: "Feche seu projeto",
+    text: "Após a contratação de um serviço elegível da LH Prime, sua participação poderá ser liberada.",
   },
   {
     number: "02",
-    title: "Receba sua proposta",
-    text: "A equipe analisa o serviço e prepara sua proposta.",
+    title: "Receba sua participação",
+    text: "Após a confirmação, a LH Prime disponibiliza sua participação individual.",
   },
   {
     number: "03",
-    title: "Feche seu serviço",
-    text: "Contrate um serviço participante conforme as condições da campanha.",
+    title: "Gire a roleta",
+    text: "Acesse sua participação e descubra o resultado.",
   },
   {
     number: "04",
-    title: "Participe",
-    text: "Após a confirmação, você recebe sua participação no Cliente Premiado LH Prime.",
-  },
-];
-
-const PRIZES = [
-  {
-    number: "01",
-    icon: PaintBucket,
-    title: "1 lata de tinta 18L",
-    tag: "Peg&Pinte ou Coralar",
-    text: "Uma ajuda extra para continuar transformando seu imóvel.",
-  },
-  {
-    number: "02",
-    icon: PaintRoller,
-    title: "1 lata de Coralit 3,6L",
-    tag: null,
-    text: "Para renovar e valorizar ainda mais os detalhes do seu imóvel.",
-  },
-  {
-    number: "03",
-    icon: Flame,
-    title: "Kit churrasco",
-    tag: null,
-    text: "Porque depois da transformação, também é hora de aproveitar a casa.",
-  },
-];
-
-const WHY = [
-  {
-    icon: Layers,
-    title: "Preparação",
-    text: "Cuidado com cada etapa antes da pintura.",
-  },
-  {
-    icon: BadgeCheck,
-    title: "Qualidade",
-    text: "Materiais e processos adequados para cada serviço.",
-  },
-  {
-    icon: Sparkles,
-    title: "Acabamento",
-    text: "Atenção aos detalhes que fazem diferença no resultado.",
-  },
-  {
-    icon: Handshake,
-    title: "Compromisso",
-    text: "Organização, comunicação e cuidado com seu imóvel.",
+    title: "Confira seu resultado",
+    text: "O resultado fica registrado e, quando aplicável, a LH Prime fornece as orientações para recebimento do prêmio.",
   },
 ];
 
 /* ------------------------------------------------------------------ */
-/* Componentes da página                                               */
+/* Componentes de estados da experiência                               */
 /* ------------------------------------------------------------------ */
 
 const CampaignHeader = ({ link }: { link: string }) => (
@@ -144,7 +116,7 @@ const CampaignHeader = ({ link }: { link: string }) => (
   </header>
 );
 
-const CampaignHero = () => (
+const CampaignHero = ({ onHaveCode }: { onHaveCode: () => void }) => (
   <section className="gradient-hero relative overflow-hidden pb-16 pt-14 lg:pb-24 lg:pt-20">
     <div className="pointer-events-none absolute -left-32 top-24 size-96 rounded-full bg-emerald/15 blur-[120px]" />
     <div className="pointer-events-none absolute -right-24 bottom-0 size-96 rounded-full bg-[#7C5CFF]/20 blur-[120px]" />
@@ -161,21 +133,28 @@ const CampaignHero = () => (
           <span className="mt-2 block text-white">LH Prime</span>
         </h1>
 
-        <p className="font-display text-lg font-semibold text-on-dark sm:text-xl">
-          Sua casa renovada. E você ainda pode ganhar.
+        <p className="font-display text-xl font-bold text-on-dark sm:text-2xl">
+          Fechou. <span className="text-emerald">Girou.</span>{" "}
+          <span className="text-emerald">Pode ganhar.</span>
         </p>
 
         <p className="max-w-xl text-base leading-relaxed text-on-dark-muted sm:text-lg">
-          Solicite seu orçamento, contrate um serviço participante da LH Prime e
-          participe da campanha Cliente Premiado.
+          Fechou seu projeto com a LH Prime? Seu orçamento pode liberar uma
+          participação na nossa Roleta Cliente Premiado.
         </p>
 
         <div className="mt-2 flex flex-wrap items-center gap-3">
-          <Button asChild variant="whatsapp" size="xl">
-            <a href="#orcamento">Quero solicitar meu orçamento</a>
+          <Button
+            type="button"
+            variant="whatsapp"
+            size="xl"
+            data-cta="roleta-participacao"
+            onClick={onHaveCode}
+          >
+            Tenho minha participação
           </Button>
           <Button asChild variant="hero-secondary" size="xl">
-            <a href="#como-funciona">Ver como funciona</a>
+            <a href="#como-funciona">Como funciona?</a>
           </Button>
         </div>
       </div>
@@ -195,124 +174,20 @@ const CampaignHero = () => (
   </section>
 );
 
-const Chamada = () => (
-  <section className="gradient-mist py-16 lg:py-24">
-    <div className="mx-auto flex w-full max-w-4xl flex-col items-center gap-6 px-5 text-center lg:px-8">
-      <h2 className="font-display text-2xl font-bold leading-snug text-primary sm:text-3xl lg:text-4xl lg:leading-snug">
-        Você transforma seu ambiente.
-        <span className="mt-2 block text-emerald">
-          A LH Prime transforma isso em uma experiência ainda melhor.
-        </span>
-      </h2>
-      <p className="max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-        Ao contratar um serviço participante da LH Prime, você poderá participar
-        da campanha Cliente Premiado e concorrer a prêmios pensados para deixar
-        sua casa ainda melhor.
-      </p>
-    </div>
-  </section>
-);
-
-const Premios = () => (
-  <section id="premios" className="scroll-mt-20 bg-background py-20 lg:py-28">
-    <div className="mx-auto flex w-full max-w-7xl flex-col items-center gap-14 px-5 lg:px-8">
-      <SectionHeader
-        eyebrow="Prêmios"
-        title="Prêmios do Cliente Premiado"
-        description="Fechou um serviço participante? Você poderá concorrer a:"
-      />
-
-      <div className="grid w-full gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {PRIZES.map((prize) => {
-          const Icon = prize.icon;
-          return (
-            <article
-              key={prize.number}
-              className="group flex flex-col gap-4 rounded-2xl border border-border/70 bg-card p-7 shadow-card transition-all duration-300 hover:-translate-y-1 hover:border-primary/25 hover:shadow-elegant"
-            >
-              <div className="flex items-start justify-between">
-                <span className="flex size-12 items-center justify-center rounded-xl bg-secondary text-primary transition-colors duration-300 group-hover:bg-primary group-hover:text-white">
-                  <Icon className="size-6" />
-                </span>
-                <span className="font-display text-3xl font-extrabold text-primary/10">
-                  {prize.number}
-                </span>
-              </div>
-              <div className="flex flex-col gap-2">
-                <h3 className="font-display text-lg font-semibold text-primary">
-                  {prize.title}
-                </h3>
-                {prize.tag ? (
-                  <span className="w-fit rounded-full bg-primary/5 px-3 py-1 text-xs font-semibold text-primary">
-                    {prize.tag}
-                  </span>
-                ) : null}
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  {prize.text}
-                </p>
-              </div>
-            </article>
-          );
-        })}
-      </div>
-
-      <p className="max-w-2xl text-center text-xs leading-relaxed text-muted-foreground">
-        Os prêmios estão sujeitos às condições do regulamento da campanha.
-        Modelos, cores e especificações serão informados no regulamento oficial.
-      </p>
-    </div>
-  </section>
-);
-
-const Beneficio = () => (
-  <section className="gradient-ink relative overflow-hidden py-16 lg:py-20">
-    <div className="pointer-events-none absolute -left-24 top-0 size-80 rounded-full bg-emerald/10 blur-[110px]" />
-    <div className="pointer-events-none absolute -right-24 bottom-0 size-80 rounded-full bg-[#7C5CFF]/20 blur-[110px]" />
-
-    <div className="relative mx-auto w-full max-w-5xl px-5 lg:px-8">
-      <div className="flex flex-col gap-8 rounded-3xl border border-emerald/30 bg-white/[0.04] p-8 backdrop-blur-sm lg:p-12">
-        <span className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald/40 bg-emerald/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.18em] text-emerald">
-          <BadgePercent className="size-3.5" />
-          Benefício LH Prime
-        </span>
-
-        <div className="grid items-center gap-8 lg:grid-cols-[1fr_auto]">
-          <div className="flex flex-col gap-3">
-            <h2 className="font-display text-2xl font-bold text-white sm:text-3xl">
-              Prefere economizar agora?
-            </h2>
-            <p className="max-w-xl text-sm leading-relaxed text-on-dark-muted sm:text-base">
-              10% de desconto para pagamento via PIX, conforme as condições
-              comerciais da campanha.
-            </p>
-          </div>
-          <p className="text-center font-display text-6xl font-extrabold leading-none text-emerald sm:text-7xl lg:text-8xl">
-            10%<span className="block text-lg font-bold uppercase tracking-[0.2em] text-on-dark-muted">off</span>
-          </p>
-        </div>
-
-        <Button asChild variant="whatsapp" size="lg" className="w-fit">
-          <a href="#orcamento">Solicitar orçamento</a>
-        </Button>
-      </div>
-    </div>
-  </section>
-);
-
 const ComoFunciona = () => (
   <section id="como-funciona" className="gradient-mist scroll-mt-20 py-20 lg:py-28">
     <div className="mx-auto flex w-full max-w-7xl flex-col items-center gap-12 px-5 lg:px-8">
       <SectionHeader
-        eyebrow="Como participar"
+        eyebrow="Como funciona"
         title="Como funciona?"
-        description="Do primeiro contato à sua participação na campanha."
+        description="Quatro passos simples até o resultado da sua participação."
       />
 
       <div className="grid w-full gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        {STEPS.map((step, index) => (
+        {STEPS.map((step) => (
           <div
             key={step.number}
-            className="relative flex flex-col gap-4 rounded-2xl border border-border/70 bg-card p-6 shadow-card transition-all duration-300 hover:-translate-y-1 hover:shadow-elegant"
+            className="flex flex-col gap-4 rounded-2xl border border-border/70 bg-card p-6 shadow-card transition-all duration-300 hover:-translate-y-1 hover:shadow-elegant"
           >
             <span className="flex size-11 items-center justify-center rounded-full border-2 border-emerald bg-primary font-display text-sm font-bold text-emerald">
               {step.number}
@@ -323,55 +198,315 @@ const ComoFunciona = () => (
             <p className="text-sm leading-relaxed text-muted-foreground">
               {step.text}
             </p>
-            {index < STEPS.length - 1 ? (
-              <span className="hidden h-px flex-1 bg-gradient-to-r from-primary/20 to-transparent lg:block" />
-            ) : null}
           </div>
         ))}
       </div>
+    </div>
+  </section>
+);
 
-      <Button asChild variant="whatsapp" size="lg">
-        <a href="#orcamento">Quero participar</a>
+const Premios = () => {
+  const prizes = enabledPrizes(CAMPAIGN_PRIZES);
+
+  return (
+    <section id="premios" className="scroll-mt-20 bg-background py-20 lg:py-28">
+      <div className="mx-auto flex w-full max-w-7xl flex-col items-center gap-14 px-5 lg:px-8">
+        <SectionHeader
+          eyebrow="Prêmios da campanha"
+          title="Prêmios do Cliente Premiado"
+          description="A roleta poderá apresentar um destes prêmios. Itens sujeitos às condições do regulamento oficial."
+        />
+
+        <div className="grid w-full gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {prizes.map((prize, index) => {
+            const Icon = prize.icon;
+            return (
+              <article
+                key={prize.id}
+                className="group flex flex-col gap-4 rounded-2xl border border-border/70 bg-card p-7 shadow-card transition-all duration-300 hover:-translate-y-1 hover:border-primary/25 hover:shadow-elegant"
+              >
+                <div className="flex items-start justify-between">
+                  <span className="flex size-12 items-center justify-center rounded-xl bg-secondary text-primary transition-colors duration-300 group-hover:bg-primary group-hover:text-white">
+                    <Icon className="size-6" />
+                  </span>
+                  <span className="font-display text-3xl font-extrabold text-primary/10">
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                </div>
+                <h3 className="font-display text-lg font-semibold text-primary">
+                  {prize.name}
+                </h3>
+              </article>
+            );
+          })}
+        </div>
+
+        <p className="max-w-2xl text-center text-xs leading-relaxed text-muted-foreground">
+          Prêmios, quantidades e disponibilidade estão sujeitos às condições do
+          regulamento oficial da campanha.
+        </p>
+      </div>
+    </section>
+  );
+};
+
+const ParticipationCodeDialog = ({
+  open,
+  onOpenChange,
+  value,
+  onChange,
+  onSubmit,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  value: string;
+  onChange: (value: string) => void;
+  onSubmit: (value: string) => void;
+}) => {
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit(value);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-display">Sua participação</DialogTitle>
+          <DialogDescription>
+            Informe o código de participação que a LH Prime disponibilizou para
+            você.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="Ex.: LH-000000"
+            autoFocus
+            className="h-11 rounded-xl border border-input bg-background px-4 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary/50 focus:ring-2 focus:ring-ring/20"
+          />
+          <Button type="submit" variant="whatsapp" size="lg" className="w-full">
+            Validar participação
+          </Button>
+          <p className="text-center text-xs text-muted-foreground">
+            A validação é feita de forma segura. Sua participação tem uso único.
+          </p>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+const LockedPanel = ({ onHaveCode }: { onHaveCode: () => void }) => (
+  <div className="flex w-full flex-col items-center gap-4 rounded-3xl border border-white/10 bg-white/5 p-6 text-center backdrop-blur-sm lg:p-8">
+    <span className="flex size-12 items-center justify-center rounded-full bg-white/10 text-emerald">
+      <Lock className="size-6" />
+    </span>
+    <h3 className="font-display text-xl font-bold uppercase tracking-wide text-white">
+      Roleta bloqueada
+    </h3>
+    <p className="max-w-md text-sm leading-relaxed text-on-dark-muted">
+      A Roleta Cliente Premiado é exclusiva para clientes com participação
+      liberada pela LH Prime.
+    </p>
+    <div className="flex w-full flex-col items-center justify-center gap-3 sm:w-auto sm:flex-row">
+      <Button
+        type="button"
+        variant="whatsapp"
+        size="lg"
+        className="w-full sm:w-auto"
+        data-cta="roleta-ja-tenho-participacao"
+        onClick={onHaveCode}
+      >
+        Já tenho minha participação
+      </Button>
+      <Button asChild variant="hero-secondary" size="lg" className="w-full sm:w-auto">
+        <a href="#orcamento">Solicitar orçamento</a>
       </Button>
     </div>
-  </section>
+  </div>
 );
 
-const PorQue = () => (
-  <section className="bg-background py-20 lg:py-28">
-    <div className="mx-auto flex w-full max-w-7xl flex-col items-center gap-14 px-5 lg:px-8">
-      <SectionHeader
-        eyebrow="Por que LH Prime"
-        title="O prêmio é um extra. A transformação é o principal."
-        description="O motivo mais importante para contratar é a qualidade do serviço. Os prêmios são um incentivo a mais."
-      />
-
-      <div className="grid w-full gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        {WHY.map((item) => {
-          const Icon = item.icon;
-          return (
-            <div
-              key={item.title}
-              className="group flex flex-col gap-4 rounded-2xl border border-border/70 bg-card p-6 shadow-card transition-all duration-300 hover:-translate-y-1 hover:border-primary/25 hover:shadow-elegant"
-            >
-              <span className="flex size-12 items-center justify-center rounded-xl bg-secondary text-primary transition-colors duration-300 group-hover:bg-primary group-hover:text-white">
-                <Icon className="size-6" />
-              </span>
-              <div className="flex flex-col gap-2">
-                <h3 className="font-display text-lg font-semibold text-primary">
-                  {item.title}
-                </h3>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  {item.text}
-                </p>
-              </div>
-            </div>
-          );
-        })}
+const StatusMessage = ({ participation }: { participation: Participation }) => {
+  if (participation.status === "validating") {
+    return (
+      <div className="flex w-full animate-pop-in flex-col items-center gap-3 rounded-3xl border border-white/10 bg-white/5 p-6 text-center backdrop-blur-sm">
+        <Loader2 className="size-6 animate-spin text-emerald" />
+        <p className="text-sm text-on-dark">Validando sua participação...</p>
       </div>
+    );
+  }
+
+  if (participation.status === "not_released") {
+    return (
+      <div className="flex w-full animate-pop-in flex-col items-center gap-3 rounded-3xl border border-white/10 bg-white/5 p-6 text-center backdrop-blur-sm">
+        <span className="flex size-12 items-center justify-center rounded-full bg-white/10 text-emerald">
+          <Info className="size-6" />
+        </span>
+        <h3 className="font-display text-lg font-bold text-white">
+          Participação em análise
+        </h3>
+        <p className="max-w-md text-sm leading-relaxed text-on-dark-muted">
+          A validação de participações será ativada em breve. Assim que o
+          sistema estiver no ar, você poderá girar a roleta com o seu código.
+        </p>
+        {participation.code ? (
+          <p className="rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-xs font-semibold text-on-dark">
+            Código informado: {participation.code}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (participation.status === "used") {
+    return (
+      <div className="flex w-full animate-pop-in flex-col items-center gap-3 rounded-3xl border border-white/10 bg-white/5 p-6 text-center backdrop-blur-sm">
+        <h3 className="font-display text-lg font-bold text-white">
+          Sua participação já foi realizada
+        </h3>
+        {participation.result ? (
+          <p className="font-display text-xl font-bold text-emerald">
+            Resultado: {participation.result}
+          </p>
+        ) : null}
+        {participation.code ? (
+          <p className="rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-xs font-semibold text-on-dark">
+            Código: {participation.code}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (participation.status === "error") {
+    return (
+      <div className="flex w-full animate-pop-in flex-col items-center gap-3 rounded-3xl border border-white/10 bg-white/5 p-6 text-center backdrop-blur-sm">
+        <p className="text-sm text-on-dark">
+          Não foi possível validar sua participação agora. Tente novamente em
+          instantes.
+        </p>
+      </div>
+    );
+  }
+
+  return null;
+};
+
+const WonPanel = ({
+  participation,
+  prizeName,
+}: {
+  participation: Participation;
+  prizeName: string;
+}) => {
+  const code = participation.code ?? "";
+  return (
+    <div className="flex w-full animate-pop-in flex-col items-center gap-3 rounded-3xl border border-emerald/40 bg-emerald/[0.07] p-6 text-center backdrop-blur-sm lg:p-8">
+      <span className="flex size-12 items-center justify-center rounded-full bg-emerald text-white shadow-glow">
+        <Sparkles className="size-6" />
+      </span>
+      <p className="font-display text-lg font-bold text-white">
+        Parabéns{participation.name ? `, ${participation.name}` : ""}!
+      </p>
+      <p className="text-xs font-bold uppercase tracking-[0.18em] text-on-dark-muted">
+        Você ganhou
+      </p>
+      <p className="font-display text-2xl font-extrabold text-emerald lg:text-3xl">
+        {prizeName}
+      </p>
+      <p className="text-sm text-on-dark-muted">Sua participação foi registrada.</p>
+      {code ? (
+        <p className="rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-xs font-semibold text-on-dark">
+          Código: {code}
+        </p>
+      ) : null}
+      <Button
+        asChild
+        variant="whatsapp"
+        size="lg"
+        className="mt-1"
+        data-cta="roleta-resultado"
+      >
+        <a href={buildResultLink(code, prizeName)} target="_blank" rel="noreferrer">
+          <MessageCircle className="size-4" />
+          Falar com a LH Prime
+        </a>
+      </Button>
     </div>
-  </section>
-);
+  );
+};
+
+const RoletaSection = ({
+  prizes,
+  participation,
+  spinPhase,
+  targetIndex,
+  wheelLocked,
+  onHaveCode,
+  onSpin,
+  onSpinComplete,
+}: {
+  prizes: ReturnType<typeof enabledPrizes>;
+  participation: Participation;
+  spinPhase: SpinPhase;
+  targetIndex: number | null;
+  wheelLocked: boolean;
+  onHaveCode: () => void;
+  onSpin: () => void;
+  onSpinComplete: () => void;
+}) => {
+  const prizeName =
+    targetIndex != null && prizes[targetIndex]
+      ? prizes[targetIndex].name
+      : participation.result ?? "";
+
+  return (
+    <section
+      id="roleta"
+      className="gradient-ink relative overflow-hidden scroll-mt-20 py-20 lg:py-28"
+    >
+      <div className="pointer-events-none absolute -left-24 top-20 size-80 rounded-full bg-emerald/10 blur-[120px]" />
+      <div className="pointer-events-none absolute -right-24 bottom-10 size-96 rounded-full bg-[#7C5CFF]/20 blur-[120px]" />
+
+      <div className="relative mx-auto flex w-full max-w-3xl flex-col items-center gap-8 px-5 lg:px-8">
+        <SectionHeader
+          dark
+          eyebrow="Roleta Cliente Premiado"
+          title="Gire e descubra seu resultado"
+          description="Exclusiva para clientes com participação liberada pela LH Prime."
+        />
+
+        <RouletteWheel
+          prizes={prizes}
+          locked={wheelLocked}
+          spinning={spinPhase === "spinning"}
+          revealed={spinPhase === "won"}
+          targetIndex={targetIndex}
+          onSpin={onSpin}
+          onSpinComplete={onSpinComplete}
+        />
+
+        {wheelLocked && participation.status === "none" ? (
+          <LockedPanel onHaveCode={onHaveCode} />
+        ) : null}
+
+        {participation.status === "validating" ||
+        participation.status === "not_released" ||
+        participation.status === "used" ||
+        participation.status === "error" ? (
+          <StatusMessage participation={participation} />
+        ) : null}
+
+        {!wheelLocked && spinPhase === "won" ? (
+          <WonPanel participation={participation} prizeName={prizeName} />
+        ) : null}
+      </div>
+    </section>
+  );
+};
 
 const RegulamentoDialog = () => (
   <Dialog>
@@ -396,45 +531,6 @@ const RegulamentoDialog = () => (
   </Dialog>
 );
 
-const CtaFinal = ({ link }: { link: string }) => (
-  <section className="gradient-hero relative overflow-hidden py-20 lg:py-28">
-    <div className="pointer-events-none absolute -left-24 top-10 size-96 rounded-full bg-[#7C5CFF]/20 blur-[120px]" />
-    <div className="pointer-events-none absolute -right-24 bottom-0 size-80 rounded-full bg-emerald/10 blur-[120px]" />
-
-    <div className="relative mx-auto flex w-full max-w-4xl flex-col items-center gap-7 px-5 text-center lg:px-8">
-      <h2 className="font-display text-3xl font-extrabold tracking-tight text-white sm:text-4xl lg:text-5xl">
-        Pronto para transformar seu imóvel?
-      </h2>
-      <p className="max-w-2xl text-base leading-relaxed text-on-dark-muted sm:text-lg">
-        Solicite seu orçamento com a LH Prime e descubra as condições para
-        participar do Cliente Premiado.
-      </p>
-      <div className="mt-2 flex flex-wrap items-center justify-center gap-3">
-        <Button asChild variant="whatsapp" size="xl">
-          <a href="#orcamento">Quero meu orçamento</a>
-        </Button>
-        <Button asChild variant="hero-secondary" size="xl">
-          <a href={link} target="_blank" rel="noreferrer">
-            <MessageCircle className="size-5" />
-            Falar no WhatsApp
-          </a>
-        </Button>
-      </div>
-      <div className="mt-8 flex flex-col items-center gap-1">
-        <p className="font-display text-lg font-bold text-white">
-          LH <span className="text-emerald">Prime</span>
-        </p>
-        <p className="text-sm font-medium text-on-dark-muted">
-          Pinturas &amp; Acabamentos de Alto Padrão
-        </p>
-        <p className="text-sm text-on-dark-muted">
-          Da primeira ideia à última demão.
-        </p>
-      </div>
-    </div>
-  </section>
-);
-
 const OrcamentoSection = ({
   link,
   source,
@@ -442,7 +538,10 @@ const OrcamentoSection = ({
   link: string;
   source: string | null;
 }) => (
-  <section id="orcamento" className="gradient-ink relative overflow-hidden scroll-mt-20 py-20 lg:py-28">
+  <section
+    id="orcamento"
+    className="gradient-ink relative overflow-hidden scroll-mt-20 py-20 lg:py-28"
+  >
     <div className="pointer-events-none absolute -right-24 top-10 size-96 rounded-full bg-[#7C5CFF]/20 blur-[120px]" />
     <div className="pointer-events-none absolute -left-24 bottom-0 size-80 rounded-full bg-emerald/10 blur-[120px]" />
 
@@ -533,20 +632,90 @@ const ClientePremiado = () => {
   const source = useMemo(getSource, []);
   const link = useMemo(() => campaignLink(source), [source]);
 
+  const [participation, setParticipation] = useState<Participation>({
+    status: "none",
+    code: null,
+    name: null,
+    result: null,
+  });
+  const [spinPhase, setSpinPhase] = useState<SpinPhase>("idle");
+  const [targetIndex, setTargetIndex] = useState<number | null>(null);
+  const [codeDialogOpen, setCodeDialogOpen] = useState(false);
+  const [codeInput, setCodeInput] = useState("");
+
+  const prizes = enabledPrizes(CAMPAIGN_PRIZES);
+  const wheelLocked = participation.status !== "valid";
+
+  /**
+   * Validação da participação. NO FUTURO este trecho será substituído por uma
+   * chamada ao backend (validar código, verificar status/uso e recuperar
+   * resultado já registrado). O resultado definitivo NUNCA é decidido aqui.
+   */
+  const validateCode = useCallback((raw: string) => {
+    const code = raw.trim().toUpperCase();
+    if (!code) return;
+    setCodeDialogOpen(false);
+    setParticipation({ status: "validating", code, name: null, result: null });
+    window.setTimeout(() => {
+      setParticipation((prev) =>
+        prev.code === code ? { ...prev, status: "not_released" } : prev,
+      );
+    }, 1400);
+  }, []);
+
+  // Preparado para /cliente-premiado?codigo=CODIGO
+  useEffect(() => {
+    const codigo = new URLSearchParams(window.location.search).get("codigo");
+    if (codigo) validateCode(codigo);
+  }, [validateCode]);
+
+  /**
+   * Giro da roleta — apenas alcançável com participação válida (futuro backend).
+   * A animação representa o resultado recebido do sistema.
+   */
+  const handleSpin = useCallback(() => {
+    setSpinPhase("spinning");
+    // FUTURO: o backend retorna o índice/resultado e este trecho marca o uso.
+  }, []);
+
+  const handleSpinComplete = useCallback(() => {
+    setSpinPhase("won");
+    // FUTURO: registrar o resultado no backend (participação usada).
+  }, []);
+
+  const handleSubmitCode = (value: string) => {
+    if (!value.trim()) return;
+    validateCode(value);
+  };
+
   return (
     <div className="min-h-full w-full bg-background">
       <CampaignHeader link={link} />
       <main>
-        <CampaignHero />
-        <Chamada />
-        <Premios />
-        <Beneficio />
+        <CampaignHero onHaveCode={() => setCodeDialogOpen(true)} />
         <ComoFunciona />
-        <PorQue />
-        <CtaFinal link={link} />
+        <Premios />
+        <RoletaSection
+          prizes={prizes}
+          participation={participation}
+          spinPhase={spinPhase}
+          targetIndex={targetIndex}
+          wheelLocked={wheelLocked}
+          onHaveCode={() => setCodeDialogOpen(true)}
+          onSpin={handleSpin}
+          onSpinComplete={handleSpinComplete}
+        />
         <OrcamentoSection link={link} source={source} />
       </main>
       <CampaignFooter link={link} />
+
+      <ParticipationCodeDialog
+        open={codeDialogOpen}
+        onOpenChange={setCodeDialogOpen}
+        value={codeInput}
+        onChange={setCodeInput}
+        onSubmit={handleSubmitCode}
+      />
 
       <a
         href={link}
