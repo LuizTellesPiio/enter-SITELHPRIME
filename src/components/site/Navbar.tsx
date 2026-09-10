@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Menu, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,6 +39,12 @@ export const Navbar = () => {
               {link.label}
             </a>
           ))}
+          <Link
+            to="/cliente-premiado"
+            className="text-sm font-medium text-emerald transition-colors hover:text-white"
+          >
+            Cliente Premiado
+          </Link>
         </nav>
 
         <div className="hidden lg:block">
@@ -83,6 +90,13 @@ export const Navbar = () => {
                   {link.label}
                 </a>
               ))}
+              <Link
+                to="/cliente-premiado"
+                onClick={closeMenu}
+                className="rounded-lg px-3 py-2.5 text-base font-medium text-emerald transition-colors hover:bg-white/10 hover:text-white"
+              >
+                Cliente Premiado
+              </Link>
             </nav>
             <Button asChild variant="whatsapp" size="lg" className="mt-2">
               <a
