@@ -211,34 +211,128 @@ export const NAV_LINKS = [
   { label: "Contato", href: "#contato" },
 ];
 
-/* --- Prévia de cor (ferramenta local, sem envio de dados) --- */
+/* --- Prévia de Cores LH Prime (curadoria própria de referências visuais) ---
+ * As cores abaixo são REFERÊNCIAS VISUAIS LH PRIME (nomes e HEX próprios),
+ * não correspondências oficiais de fabricantes de tinta.
+ */
+
+export const COLOR_FAMILIES = [
+  "Brancos",
+  "Off-whites",
+  "Beges",
+  "Cinzas",
+  "Terrosos",
+  "Verdes",
+  "Azuis",
+  "Rosados",
+  "Amarelos",
+  "Escuros",
+] as const;
+
+export type ColorFamily = (typeof COLOR_FAMILIES)[number];
+
+export type ColorTone = "claro" | "medio" | "escuro";
 
 export interface PaintColor {
+  /** Nome descritivo próprio da LH Prime. */
   name: string;
+  /** Valor HEX usado apenas para renderização na tela. */
   hex: string;
+  family: ColorFamily;
+  /** Indicador claro / médio / escuro. */
+  tone: ColorTone;
 }
 
 export const PAINT_COLORS: PaintColor[] = [
-  { name: "Branco Neve", hex: "#F7F5F2" },
-  { name: "Palha", hex: "#EADFC8" },
-  { name: "Areia", hex: "#E4D5BE" },
-  { name: "Bege Café", hex: "#C9B49B" },
-  { name: "Rosa Antigo", hex: "#D9A5A0" },
-  { name: "Terracota", hex: "#C0725A" },
-  { name: "Mostarda", hex: "#D9A441" },
-  { name: "Verde Oliva", hex: "#8A8F6A" },
-  { name: "Verde Sálvia", hex: "#A8B5A2" },
-  { name: "Azul Sereno", hex: "#A9C0D0" },
-  { name: "Azul Petróleo", hex: "#4A6B7C" },
-  { name: "Lilás", hex: "#B9A7CE" },
-  { name: "Cinza Neblina", hex: "#C6C7C4" },
-  { name: "Cinza Chumbo", hex: "#6E7278" },
+  /* Brancos */
+  { name: "Branco Puro", hex: "#FFFFFF", family: "Brancos", tone: "claro" },
+  { name: "Branco Neve", hex: "#F7F5F2", family: "Brancos", tone: "claro" },
+  { name: "Branco Gelado", hex: "#F4F7F6", family: "Brancos", tone: "claro" },
+  { name: "Branco Quente", hex: "#FAF5EE", family: "Brancos", tone: "claro" },
+  { name: "Branco Azulado", hex: "#EFF3F5", family: "Brancos", tone: "claro" },
+  { name: "Calcário", hex: "#EDEDEA", family: "Brancos", tone: "claro" },
+
+  /* Off-whites */
+  { name: "Algodão", hex: "#F4F0E9", family: "Off-whites", tone: "claro" },
+  { name: "Creme Suave", hex: "#F2E9D9", family: "Off-whites", tone: "claro" },
+  { name: "Pérola", hex: "#EFE9E0", family: "Off-whites", tone: "claro" },
+  { name: "Linho", hex: "#E9E2D4", family: "Off-whites", tone: "claro" },
+  { name: "Porcelana", hex: "#F2EFE7", family: "Off-whites", tone: "claro" },
+  { name: "Marfim", hex: "#F6F0E0", family: "Off-whites", tone: "claro" },
+  { name: "Biscoito", hex: "#E8E0CF", family: "Off-whites", tone: "claro" },
+
+  /* Beges */
+  { name: "Areia Suave", hex: "#DCC9AE", family: "Beges", tone: "claro" },
+  { name: "Bege Duna", hex: "#D9C9AF", family: "Beges", tone: "claro" },
+  { name: "Bege Areia", hex: "#D3C0A2", family: "Beges", tone: "claro" },
+  { name: "Bege Café", hex: "#C9B49B", family: "Beges", tone: "medio" },
+  { name: "Camelo", hex: "#C2A87E", family: "Beges", tone: "medio" },
+  { name: "Caramelo", hex: "#B08D5C", family: "Beges", tone: "medio" },
+  { name: "Cacau", hex: "#8A6B4E", family: "Beges", tone: "escuro" },
+
+  /* Cinzas */
+  { name: "Cinza Neblina", hex: "#C6C7C4", family: "Cinzas", tone: "claro" },
+  { name: "Cinza Claro", hex: "#B4B6B3", family: "Cinzas", tone: "claro" },
+  { name: "Cinza Médio", hex: "#9A9C99", family: "Cinzas", tone: "medio" },
+  { name: "Cinza Aço", hex: "#7A7D80", family: "Cinzas", tone: "medio" },
+  { name: "Cinza Chumbo", hex: "#65686E", family: "Cinzas", tone: "medio" },
+  { name: "Cinza Escuro", hex: "#4C4F55", family: "Cinzas", tone: "escuro" },
+  { name: "Grafite", hex: "#3A3D44", family: "Cinzas", tone: "escuro" },
+
+  /* Terrosos */
+  { name: "Terracota Suave", hex: "#CE9478", family: "Terrosos", tone: "claro" },
+  { name: "Terracota", hex: "#C0725A", family: "Terrosos", tone: "medio" },
+  { name: "Barro", hex: "#B0664A", family: "Terrosos", tone: "medio" },
+  { name: "Argila", hex: "#B8774A", family: "Terrosos", tone: "medio" },
+  { name: "Tijolo", hex: "#A5573D", family: "Terrosos", tone: "medio" },
+  { name: "Bronze", hex: "#8A6642", family: "Terrosos", tone: "medio" },
+  { name: "Sépia", hex: "#6E5436", family: "Terrosos", tone: "escuro" },
+
+  /* Verdes */
+  { name: "Verde Menta", hex: "#CBDCC7", family: "Verdes", tone: "claro" },
+  { name: "Verde Sálvia", hex: "#A8B5A2", family: "Verdes", tone: "claro" },
+  { name: "Verde Oliva", hex: "#8A8F6A", family: "Verdes", tone: "medio" },
+  { name: "Verde Musgo", hex: "#6B7554", family: "Verdes", tone: "medio" },
+  { name: "Verde Folha", hex: "#5A7D5A", family: "Verdes", tone: "medio" },
+  { name: "Verde Esmeralda", hex: "#2E6B5E", family: "Verdes", tone: "escuro" },
+  { name: "Verde Pinho", hex: "#35523F", family: "Verdes", tone: "escuro" },
+
+  /* Azuis */
+  { name: "Azul Pálido", hex: "#C3D3DC", family: "Azuis", tone: "claro" },
+  { name: "Azul Sereno", hex: "#A9C0D0", family: "Azuis", tone: "claro" },
+  { name: "Azul Céu", hex: "#93B0C4", family: "Azuis", tone: "claro" },
+  { name: "Azul Médio", hex: "#6E8FA6", family: "Azuis", tone: "medio" },
+  { name: "Azul Petróleo", hex: "#4A6B7C", family: "Azuis", tone: "medio" },
+  { name: "Azul Marinho", hex: "#3B5A76", family: "Azuis", tone: "medio" },
+  { name: "Azul Noite", hex: "#2C3E56", family: "Azuis", tone: "escuro" },
+
+  /* Rosados */
+  { name: "Rosa Claro", hex: "#EFCFC9", family: "Rosados", tone: "claro" },
+  { name: "Rosa Suave", hex: "#E2B6AE", family: "Rosados", tone: "claro" },
+  { name: "Rosa Antigo", hex: "#D9A5A0", family: "Rosados", tone: "claro" },
+  { name: "Rosa Médio", hex: "#C98D86", family: "Rosados", tone: "medio" },
+  { name: "Terracota Rosado", hex: "#C07A6E", family: "Rosados", tone: "medio" },
+  { name: "Amora", hex: "#8E4A55", family: "Rosados", tone: "escuro" },
+  { name: "Vinho", hex: "#7A3B45", family: "Rosados", tone: "escuro" },
+
+  /* Amarelos */
+  { name: "Amarelo Claro", hex: "#F3E6BC", family: "Amarelos", tone: "claro" },
+  { name: "Amarelo Areia", hex: "#E8D49A", family: "Amarelos", tone: "claro" },
+  { name: "Amarelo Sol", hex: "#E3B23C", family: "Amarelos", tone: "medio" },
+  { name: "Mostarda", hex: "#D9A441", family: "Amarelos", tone: "medio" },
+  { name: "Dourado Suave", hex: "#C9A45C", family: "Amarelos", tone: "medio" },
+  { name: "Mostarda Escura", hex: "#B88A2E", family: "Amarelos", tone: "medio" },
+  { name: "Amarelo Ocre", hex: "#8F6B2F", family: "Amarelos", tone: "escuro" },
+
+  /* Escuros */
+  { name: "Grafite Azulado", hex: "#2C3340", family: "Escuros", tone: "escuro" },
+  { name: "Preto Azulado", hex: "#22262E", family: "Escuros", tone: "escuro" },
+  { name: "Azul Meia-Noite", hex: "#232B3D", family: "Escuros", tone: "escuro" },
+  { name: "Verde Profundo", hex: "#22322B", family: "Escuros", tone: "escuro" },
+  { name: "Roxo Profundo", hex: "#2E2440", family: "Escuros", tone: "escuro" },
+  { name: "Marrom Profundo", hex: "#33261C", family: "Escuros", tone: "escuro" },
+  { name: "Carvão", hex: "#33343A", family: "Escuros", tone: "escuro" },
 ];
-
-export const DEFAULT_PREVIEW_COLOR = PAINT_COLORS[2];
-
-/** Opacidade inicial da camada de cor na prévia (em %). */
-export const DEFAULT_PREVIEW_INTENSITY = 60;
 
 /* --- Vantagens exclusivas --- */
 

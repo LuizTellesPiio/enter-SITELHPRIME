@@ -3,6 +3,7 @@ import { MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SERVICE_OPTIONS } from "@/data/site";
 import { buildWhatsAppLink } from "@/lib/whatsapp";
+import { clearQuoteColors, getQuoteColors } from "@/lib/quote-intent";
 
 interface ContactFormProps {
   /** Origem da campanha (ex.: "Cartão", "Panfleto") incluída na mensagem do WhatsApp. */
@@ -25,6 +26,8 @@ export const ContactForm = ({ source }: ContactFormProps) => {
     }
     setError("");
 
+    const colorRefs = getQuoteColors();
+
     const text = [
       "Olá! Conheci a LH Prime Pinturas através do site e gostaria de solicitar um orçamento.",
       "",
@@ -33,12 +36,16 @@ export const ContactForm = ({ source }: ContactFormProps) => {
       "Cidade: " + city.trim(),
       "Tipo de serviço: " + service,
       message.trim() ? "Mensagem: " + message.trim() : null,
+      colorRefs.length > 0
+        ? "Referências de cor:\n" + colorRefs.map((c) => `- ${c}`).join("\n")
+        : null,
       source ? "Origem: " + source : null,
     ]
       .filter(Boolean)
       .join("\n");
 
     window.open(buildWhatsAppLink(text), "_blank", "noopener,noreferrer");
+    clearQuoteColors();
   };
 
   return (
