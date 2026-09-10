@@ -205,10 +205,40 @@ export const NAV_LINKS = [
   { label: "Descontos", href: "#descontos" },
   { label: "Antes e Depois", href: "#antes-e-depois" },
   { label: "Galeria", href: "#galeria" },
+  { label: "Prévia de cor", href: "#previa" },
   { label: "Processo", href: "#processo" },
   { label: "FAQ", href: "#faq" },
   { label: "Contato", href: "#contato" },
 ];
+
+/* --- Prévia de cor (ferramenta local, sem envio de dados) --- */
+
+export interface PaintColor {
+  name: string;
+  hex: string;
+}
+
+export const PAINT_COLORS: PaintColor[] = [
+  { name: "Branco Neve", hex: "#F7F5F2" },
+  { name: "Palha", hex: "#EADFC8" },
+  { name: "Areia", hex: "#E4D5BE" },
+  { name: "Bege Café", hex: "#C9B49B" },
+  { name: "Rosa Antigo", hex: "#D9A5A0" },
+  { name: "Terracota", hex: "#C0725A" },
+  { name: "Mostarda", hex: "#D9A441" },
+  { name: "Verde Oliva", hex: "#8A8F6A" },
+  { name: "Verde Sálvia", hex: "#A8B5A2" },
+  { name: "Azul Sereno", hex: "#A9C0D0" },
+  { name: "Azul Petróleo", hex: "#4A6B7C" },
+  { name: "Lilás", hex: "#B9A7CE" },
+  { name: "Cinza Neblina", hex: "#C6C7C4" },
+  { name: "Cinza Chumbo", hex: "#6E7278" },
+];
+
+export const DEFAULT_PREVIEW_COLOR = PAINT_COLORS[2];
+
+/** Opacidade inicial da camada de cor na prévia (em %). */
+export const DEFAULT_PREVIEW_INTENSITY = 60;
 
 /* --- Vantagens exclusivas --- */
 
