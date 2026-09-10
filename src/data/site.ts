@@ -202,11 +202,50 @@ export const FAQ_ITEMS: FaqItem[] = [
 
 export const NAV_LINKS = [
   { label: "Serviços", href: "#servicos" },
+  { label: "Descontos", href: "#descontos" },
   { label: "Antes e Depois", href: "#antes-e-depois" },
   { label: "Galeria", href: "#galeria" },
   { label: "Processo", href: "#processo" },
   { label: "FAQ", href: "#faq" },
   { label: "Contato", href: "#contato" },
+];
+
+/* --- Vantagens exclusivas --- */
+
+export const DISCOUNT_PERCENT = 10;
+
+/** Valor mínimo do orçamento que dá direito ao brinde. */
+export const GIFT_MIN_AMOUNT = 1000;
+
+export const GIFT_PAINT = "lata de 18L Coral Rende Muito";
+
+export const GIFT_MIN_AMOUNT_LABEL = GIFT_MIN_AMOUNT.toLocaleString("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+});
+
+export interface PartnerStore {
+  /** Nome da loja parceira. Enquanto for null, a seção mostra o espaço reservado. */
+  name: string | null;
+  /** Ex.: "Materiais de construção" */
+  category?: string;
+  /** Ex.: "10% de desconto no material" */
+  benefit?: string;
+  /** Ex.: "Centro - Bom Jesus do Itabapoana" */
+  address?: string;
+  /** Link do WhatsApp ou site da loja. */
+  link?: string;
+}
+
+/**
+ * Lojas parceiras. Para publicar uma loja, preencha `name` e os demais campos.
+ * Slots com `name: null` aparecem como espaço reservado na página.
+ */
+export const PARTNER_STORES: PartnerStore[] = [
+  { name: null },
+  { name: null },
+  { name: null },
+  { name: null },
 ];
 
 export const SERVICE_OPTIONS = [
