@@ -1,4 +1,5 @@
 import Index from "./pages/Index";
+import ClientePremiado from "./pages/ClientePremiado";
 import NotFound from "./pages/NotFound";
 
 export const routers = [
@@ -6,6 +7,11 @@ export const routers = [
     path: "/",
     name: "home",
     element: <Index />,
+  },
+  {
+    path: "/cliente-premiado",
+    name: "cliente-premiado",
+    element: <ClientePremiado />,
   },
   /* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */
   {

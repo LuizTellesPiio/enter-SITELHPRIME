@@ -4,7 +4,12 @@ import { Button } from "@/components/ui/button";
 import { SERVICE_OPTIONS } from "@/data/site";
 import { buildWhatsAppLink } from "@/lib/whatsapp";
 
-export const ContactForm = () => {
+interface ContactFormProps {
+  /** Origem da campanha (ex.: "Cartão", "Panfleto") incluída na mensagem do WhatsApp. */
+  source?: string | null;
+}
+
+export const ContactForm = ({ source }: ContactFormProps) => {
   const [name, setName] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [city, setCity] = useState("");
@@ -28,6 +33,7 @@ export const ContactForm = () => {
       "Cidade: " + city.trim(),
       "Tipo de serviço: " + service,
       message.trim() ? "Mensagem: " + message.trim() : null,
+      source ? "Origem: " + source : null,
     ]
       .filter(Boolean)
       .join("\n");
