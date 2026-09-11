@@ -67,16 +67,14 @@ Origem: ${source}`,
 /** Mensagem do cliente para a LH Prime depois de girar (destino: WhatsApp oficial). */
 const buildResultLink = (code: string, prize: string): string =>
   buildWhatsAppLink(
-    `🎁 Olá, LH Prime!
+    `Olá, LH Prime!
 
-Acabei de participar do Cliente Premiado.
+Acabei de participar do Cliente Premiado e já descobri meu prêmio.
 
 Código: ${code}
 Prêmio: ${prize}
 
-Gostaria de receber as orientações para retirar/receber meu prêmio.
-
-Obrigado!`,
+Gostaria de combinar o recebimento. Obrigado!`,
   );
 
 const STEPS = [
@@ -408,26 +406,97 @@ const WonPanel = ({
       <p className="font-display text-lg font-bold text-white">
         Parabéns{participation.name ? `, ${participation.name}` : ""}!
       </p>
-      <p className="text-xs font-bold uppercase tracking-[0.18em] text-on-dark-muted">
+      <p className="text-sm text-on-dark-muted">Sua surpresa foi revelada.</p>
+      <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald">
         Você ganhou
       </p>
       <p className="font-display text-2xl font-extrabold text-emerald lg:text-3xl">
         {prizeName}
       </p>
       <p className="text-sm text-on-dark-muted">
-        {participation.message ?? "Sua participação foi registrada."}
+        Seu prêmio já está registrado na LH Prime.
       </p>
       {code ? (
         <p className="rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-xs font-semibold text-on-dark">
-          Código: {code}
+          Código da participação: {code}
         </p>
       ) : null}
+      <p className="text-sm text-on-dark-muted">
+        Agora é só falar com nossa equipe para combinar o recebimento.
+      </p>
       <Button
         asChild
         variant="whatsapp"
         size="lg"
         className="mt-1"
         data-cta="roleta-resultado"
+      >
+        <a href={buildResultLink(code, prizeName)} target="_blank" rel="noreferrer">
+          <MessageCircle className="size-4" />
+          Falar com a LH Prime
+        </a>
+      </Button>
+    </div>
+  );
+};
+
+/** Participação liberada e ainda não girada. */
+const LiberadaPanel = ({ name }: { name: string | null }) => (
+  <div className="flex w-full animate-pop-in flex-col items-center gap-2 rounded-3xl border border-emerald/40 bg-emerald/[0.07] p-6 text-center backdrop-blur-sm lg:p-8">
+    <h3 className="font-display text-xl font-bold text-white">
+      {name ? `Sua participação está liberada, ${name}!` : "Sua participação está liberada!"}
+    </h3>
+    <p className="max-w-md text-sm leading-relaxed text-on-dark-muted">
+      Preparamos esse momento para agradecer por você ter escolhido a LH Prime.
+    </p>
+    <p className="font-display text-base font-bold text-emerald">
+      Você tem 1 giro. Boa sorte!
+    </p>
+  </div>
+);
+
+/** Reacesso com código já premiado — sem tom de erro, sem novo giro. */
+const SecondAccessPanel = ({
+  participation,
+  prizeName,
+}: {
+  participation: Participation;
+  prizeName: string;
+}) => {
+  const code = participation.code ?? "";
+  return (
+    <div className="flex w-full animate-pop-in flex-col items-center gap-3 rounded-3xl border border-emerald/40 bg-emerald/[0.07] p-6 text-center backdrop-blur-sm lg:p-8">
+      <span className="flex size-12 items-center justify-center rounded-full bg-emerald text-white shadow-glow">
+        <Sparkles className="size-6" />
+      </span>
+      <p className="font-display text-lg font-bold text-white">
+        {participation.name
+          ? `${participation.name}, seu prêmio já está garantido!`
+          : "Seu prêmio já está garantido!"}
+      </p>
+      <p className="text-sm text-on-dark-muted">
+        Você já participou do Cliente Premiado LH Prime.
+      </p>
+      <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald">
+        Seu prêmio
+      </p>
+      <p className="font-display text-2xl font-extrabold text-emerald lg:text-3xl">
+        {prizeName}
+      </p>
+      {code ? (
+        <p className="rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-xs font-semibold text-on-dark">
+          Código: {code}
+        </p>
+      ) : null}
+      <p className="max-w-md text-sm leading-relaxed text-on-dark-muted">
+        O resultado está registrado em nosso sistema. Não é necessário girar novamente.
+      </p>
+      <Button
+        asChild
+        variant="whatsapp"
+        size="lg"
+        className="mt-1"
+        data-cta="roleta-resultado-reacesso"
       >
         <a href={buildResultLink(code, prizeName)} target="_blank" rel="noreferrer">
           <MessageCircle className="size-4" />
@@ -475,7 +544,7 @@ const RoletaSection = ({
           dark
           eyebrow="Roleta Cliente Premiado"
           title="Gire e descubra seu resultado"
-          description="Exclusiva para clientes com participação liberada pela LH Prime."
+          description="Seu projeto merece mais. Você também."
         />
 
         <RouletteWheel
@@ -492,6 +561,10 @@ const RoletaSection = ({
           <LockedPanel onHaveCode={onHaveCode} />
         ) : null}
 
+        {participation.status === "valid" && spinPhase === "idle" ? (
+          <LiberadaPanel name={participation.name} />
+        ) : null}
+
         {spinPhase !== "won" &&
         (participation.status === "validating" ||
           participation.status === "used" ||
@@ -500,7 +573,9 @@ const RoletaSection = ({
           <StatusMessage participation={participation} />
         ) : null}
 
-        {spinPhase === "won" ? (
+        {spinPhase === "won" && participation.status === "used" ? (
+          <SecondAccessPanel participation={participation} prizeName={prizeName} />
+        ) : spinPhase === "won" ? (
           <WonPanel participation={participation} prizeName={prizeName} />
         ) : null}
       </div>

@@ -34,21 +34,19 @@ export const whatsappNumber = (phone: string): string => {
 
 /** Mensagem enviada pela LH Prime ao cliente com a participação liberada. */
 export const buildClientMessage = (input: { name: string; code: string; link: string }): string =>
-  `🎁 Você é Cliente Premiado LH Prime!
+  `🎁 ${firstNameOf(input.name)}, tem uma surpresa da LH Prime esperando por você!
 
-Olá, ${firstNameOf(input.name)}! 👋
+Obrigado por escolher a LH Prime Pinturas & Acabamentos para fazer parte do seu projeto.
 
-Seu projeto com a LH Prime acaba de ganhar algo a mais. 💜
+Como cliente LH Prime, você ganhou 1 participação exclusiva no Cliente Premiado.
 
-Como cliente, você recebeu 1 giro exclusivo na nossa Roleta Cliente Premiado. 🍀
-
-🎯 É só acessar seu link e girar para descobrir o que você ganhou:
+🍀 Acesse seu link, gire a roleta e descubra o seu prêmio:
 
 ${input.link}
 
-🔐 Seu código: ${input.code}
+🔐 Código da participação: ${input.code}
 
-Sua participação é individual e dá direito a um único giro.
+Sua participação é individual e válida para um único giro.
 
 Boa sorte! 💜💚
 

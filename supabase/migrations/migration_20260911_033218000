@@ -1,0 +1,4 @@
+-- limpeza dos registros de verificacao desta rodada
+delete from public.participations where code in ('LH-TEST08','LH-TEST09');
+-- devolve o estoque do premio concedido no teste de giro (vale-10 voltou a 0)
+update public.prizes set granted = greatest(granted - 1, 0), updated_at = now() where id = 'vale-10';
