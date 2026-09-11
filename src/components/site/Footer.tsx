@@ -1,4 +1,5 @@
 import { Instagram, MapPin, MessageCircle } from "lucide-react";
+import { Link } from "react-router-dom";
 import { NAV_LINKS, INSTAGRAM_URL, CITY } from "@/data/site";
 import { DEFAULT_WHATSAPP_LINK } from "@/lib/whatsapp";
 
@@ -66,11 +67,17 @@ export const Footer = () => {
           </div>
         </div>
 
-        <div className="border-t border-white/10 pt-6">
-          <p className="text-center text-xs text-on-dark-muted">
+        <div className="flex flex-col items-center gap-3 border-t border-white/10 pt-6 sm:flex-row sm:justify-between">
+          <p className="text-center text-xs text-on-dark-muted sm:text-left">
             © {new Date().getFullYear()} LH Prime Pinturas. Todos os direitos
             reservados.
           </p>
+          <Link
+            to="/painel"
+            className="text-xs font-medium text-on-dark-muted underline-offset-4 transition-colors hover:text-white hover:underline"
+          >
+            Painel LH Prime
+          </Link>
         </div>
       </div>
     </footer>

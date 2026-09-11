@@ -48,10 +48,15 @@ export const RouletteWheel = ({
   const [rotation, setRotation] = useState(0);
   const segment = prizes.length > 0 ? 360 / prizes.length : 60;
 
-  // A animação apenas REPRESENTA o resultado recebido do sistema (backend no futuro).
+  // A animação apenas REPRESENTA o resultado recebido do backend. Quando o
+  // cliente reabre um código já premiado, o ponteiro é posicionado sem animação.
   useEffect(() => {
-    if (!spinning || targetIndex == null || prizes.length === 0) return;
+    if (targetIndex == null || prizes.length === 0) return;
     const base = ((270 - (targetIndex + 0.5) * segment) % 360 + 360) % 360;
+    if (!spinning) {
+      setRotation(base);
+      return;
+    }
     setRotation(
       (prev) => prev + 5 * 360 + ((base - (prev % 360) + 360) % 360),
     );
@@ -157,7 +162,7 @@ export const RouletteWheel = ({
             )}
           </button>
         </div>
-      ) : locked ? (
+      ) : locked && !revealed ? (
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
           <span
             className="flex size-[4.6rem] items-center justify-center rounded-full bg-primary text-white ring-2 ring-white/25"

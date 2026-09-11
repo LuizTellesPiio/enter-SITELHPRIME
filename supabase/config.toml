@@ -1,1 +1,9 @@
 project_id = "spb-t4n3l80n68t0ufp3"
+
+# Endpoints públicos da campanha (sem login): validam o código e realizam o
+# giro. A decisão do resultado continua sendo feita no banco, no servidor.
+[functions.validate-code]
+verify_jwt = false
+
+[functions.spin]
+verify_jwt = false

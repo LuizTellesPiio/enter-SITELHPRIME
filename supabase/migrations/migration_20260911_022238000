@@ -1,0 +1,8 @@
+-- verificacao das funcoes administrativas
+select public.award_participation('LH-TEST02');
+select public.deliver_participation('LH-TEST02');
+insert into public.participations (code, customer_name, customer_phone, budget_reference, status, released_at)
+values ('LH-TEST03', 'Cliente Cancelamento', '22977776666', 'Orcamento teste', 'LIBERADO', now())
+on conflict (code) do nothing;
+select public.cancel_participation('LH-TEST03');
+select public.cancel_participation('LH-TEST02');

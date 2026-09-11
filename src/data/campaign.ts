@@ -96,11 +96,11 @@ export const enabledPrizes = (prizes: CampaignPrize[]): CampaignPrize[] =>
 
 export type ParticipationStatus =
   | "none" // sem participação (padrão — roleta bloqueada)
-  | "validating" // validando participação
-  | "valid" // participação válida — roleta liberada
-  | "not_released" // participação não liberada
-  | "used" // participação já utilizada
-  | "error"; // erro de conexão
+  | "validating" // validando a participação no servidor
+  | "valid" // participação liberada — roleta desbloqueada
+  | "used" // participação já utilizada (resultado registrado no backend)
+  | "canceled" // participação cancelada pela LH Prime
+  | "error"; // código não encontrado, roleta não liberada ou falha de conexão
 
 export type SpinPhase = "idle" | "spinning" | "won";
 
@@ -108,6 +108,8 @@ export interface Participation {
   status: ParticipationStatus;
   code: string | null;
   name: string | null;
-  /** Resultado registrado (vem do backend no futuro). */
+  /** Resultado registrado — vem sempre do backend, nunca decidido aqui. */
   result: string | null;
+  /** Mensagem específica exibida para o cliente no estado atual. */
+  message?: string | null;
 }

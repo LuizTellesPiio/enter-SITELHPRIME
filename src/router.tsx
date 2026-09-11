@@ -1,5 +1,6 @@
 import Index from "./pages/Index";
 import ClientePremiado from "./pages/ClientePremiado";
+import Painel from "./pages/Painel";
 import NotFound from "./pages/NotFound";
 
 export const routers = [
@@ -12,6 +13,11 @@ export const routers = [
     path: "/cliente-premiado",
     name: "cliente-premiado",
     element: <ClientePremiado />,
+  },
+  {
+    path: "/painel",
+    name: "painel",
+    element: <Painel />,
   },
   /* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */
   {

@@ -1,0 +1,1 @@
+update public.campaign_config set prizes_configured = true, updated_at = now() where id = true;

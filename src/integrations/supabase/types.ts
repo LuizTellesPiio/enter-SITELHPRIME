@@ -3360,13 +3360,178 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      campaign_config: {
+        Row: {
+          id: boolean
+          prizes_configured: boolean
+          updated_at: string
+        }
+        Insert: {
+          id?: boolean
+          prizes_configured?: boolean
+          updated_at?: string
+        }
+        Update: {
+          id?: boolean
+          prizes_configured?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      participations: {
+        Row: {
+          admin_notes: string
+          budget_reference: string
+          cancelled_at: string | null
+          code: string
+          created_at: string
+          created_by: string | null
+          customer_name: string
+          customer_phone: string
+          delivered_at: string | null
+          id: string
+          released_at: string | null
+          result_prize_id: string | null
+          result_prize_name_snapshot: string | null
+          status: string
+          used_at: string | null
+          utm_source: string | null
+        }
+        Insert: {
+          admin_notes?: string
+          budget_reference?: string
+          cancelled_at?: string | null
+          code: string
+          created_at?: string
+          created_by?: string | null
+          customer_name: string
+          customer_phone: string
+          delivered_at?: string | null
+          id?: string
+          released_at?: string | null
+          result_prize_id?: string | null
+          result_prize_name_snapshot?: string | null
+          status?: string
+          used_at?: string | null
+          utm_source?: string | null
+        }
+        Update: {
+          admin_notes?: string
+          budget_reference?: string
+          cancelled_at?: string | null
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          customer_name?: string
+          customer_phone?: string
+          delivered_at?: string | null
+          id?: string
+          released_at?: string | null
+          result_prize_id?: string | null
+          result_prize_name_snapshot?: string | null
+          status?: string
+          used_at?: string | null
+          utm_source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "participations_created_by_fkey"
+            columns: ["created_by"]
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      prizes: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          granted: number
+          id: string
+          name: string
+          position: number
+          quantity: number
+          short_name: string
+          updated_at: string
+          weight: number
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          granted?: number
+          id: string
+          name: string
+          position?: number
+          quantity?: number
+          short_name: string
+          updated_at?: string
+          weight?: number
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          granted?: number
+          id?: string
+          name?: string
+          position?: number
+          quantity?: number
+          short_name?: string
+          updated_at?: string
+          weight?: number
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          id: string
+          role: string
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          role?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      award_participation: {
+        Args: { p_code: string }
+        Returns: {
+          customer_name: string
+          outcome: string
+          participation_code: string
+          prize_id: string
+          prize_name: string
+          prize_position: number
+          prize_short_name: string
+        }[]
+      }
+      cancel_participation: {
+        Args: { p_code: string }
+        Returns: string
+      }
+      deliver_participation: {
+        Args: { p_code: string }
+        Returns: string
+      }
+      is_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      save_prize_config: {
+        Args: { p_prizes: Json }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

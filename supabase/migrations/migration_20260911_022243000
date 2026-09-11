@@ -1,0 +1,4 @@
+-- limpeza final dos dados de verificacao
+update public.prizes set granted = 0, updated_at = now();
+update public.campaign_config set prizes_configured = false, updated_at = now() where id = true;
+delete from public.participations where code in ('LH-TEST01','LH-TEST02','LH-TEST03');

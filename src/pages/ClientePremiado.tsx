@@ -29,6 +29,7 @@ import {
   type SpinPhase,
 } from "@/data/campaign";
 import { INSTAGRAM_HANDLE, INSTAGRAM_URL } from "@/data/site";
+import { spinParticipation, validateParticipation } from "@/lib/campaign-api";
 import { buildWhatsAppLink } from "@/lib/whatsapp";
 
 /* ------------------------------------------------------------------ */
@@ -65,12 +66,12 @@ Origem: ${source}`,
 
 const buildResultLink = (code: string, prize: string): string =>
   buildWhatsAppLink(
-    `Olá! Participei do Cliente Premiado LH Prime.
+    `Olá! Participei do Cliente Premiado LH Prime. 🎁
 
 Código: ${code}
 Resultado: ${prize}
 
-Gostaria de receber as orientações.`,
+Gostaria de receber as orientações para receber meu prêmio.`,
   );
 
 const STEPS = [
@@ -283,7 +284,7 @@ const ParticipationCodeDialog = ({
             type="text"
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            placeholder="Ex.: LH-000000"
+            placeholder="Ex.: LH-7K4P9X"
             autoFocus
             className="h-11 rounded-xl border border-input bg-background px-4 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary/50 focus:ring-2 focus:ring-ring/20"
           />
@@ -339,28 +340,6 @@ const StatusMessage = ({ participation }: { participation: Participation }) => {
     );
   }
 
-  if (participation.status === "not_released") {
-    return (
-      <div className="flex w-full animate-pop-in flex-col items-center gap-3 rounded-3xl border border-white/10 bg-white/5 p-6 text-center backdrop-blur-sm">
-        <span className="flex size-12 items-center justify-center rounded-full bg-white/10 text-emerald">
-          <Info className="size-6" />
-        </span>
-        <h3 className="font-display text-lg font-bold text-white">
-          Participação em análise
-        </h3>
-        <p className="max-w-md text-sm leading-relaxed text-on-dark-muted">
-          A validação de participações será ativada em breve. Assim que o
-          sistema estiver no ar, você poderá girar a roleta com o seu código.
-        </p>
-        {participation.code ? (
-          <p className="rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-xs font-semibold text-on-dark">
-            Código informado: {participation.code}
-          </p>
-        ) : null}
-      </div>
-    );
-  }
-
   if (participation.status === "used") {
     return (
       <div className="flex w-full animate-pop-in flex-col items-center gap-3 rounded-3xl border border-white/10 bg-white/5 p-6 text-center backdrop-blur-sm">
@@ -372,6 +351,11 @@ const StatusMessage = ({ participation }: { participation: Participation }) => {
             Resultado: {participation.result}
           </p>
         ) : null}
+        {participation.message ? (
+          <p className="max-w-md text-sm leading-relaxed text-on-dark-muted">
+            {participation.message}
+          </p>
+        ) : null}
         {participation.code ? (
           <p className="rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-xs font-semibold text-on-dark">
             Código: {participation.code}
@@ -381,13 +365,21 @@ const StatusMessage = ({ participation }: { participation: Participation }) => {
     );
   }
 
-  if (participation.status === "error") {
+  if (participation.status === "canceled" || participation.status === "error") {
     return (
       <div className="flex w-full animate-pop-in flex-col items-center gap-3 rounded-3xl border border-white/10 bg-white/5 p-6 text-center backdrop-blur-sm">
-        <p className="text-sm text-on-dark">
-          Não foi possível validar sua participação agora. Tente novamente em
-          instantes.
+        <span className="flex size-12 items-center justify-center rounded-full bg-white/10 text-emerald">
+          <Info className="size-6" />
+        </span>
+        <p className="max-w-md text-sm leading-relaxed text-on-dark-muted">
+          {participation.message ??
+            "Não foi possível validar sua participação agora. Tente novamente em instantes."}
         </p>
+        {participation.code ? (
+          <p className="rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-xs font-semibold text-on-dark">
+            Código informado: {participation.code}
+          </p>
+        ) : null}
       </div>
     );
   }
@@ -417,7 +409,9 @@ const WonPanel = ({
       <p className="font-display text-2xl font-extrabold text-emerald lg:text-3xl">
         {prizeName}
       </p>
-      <p className="text-sm text-on-dark-muted">Sua participação foi registrada.</p>
+      <p className="text-sm text-on-dark-muted">
+        {participation.message ?? "Sua participação foi registrada."}
+      </p>
       {code ? (
         <p className="rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-xs font-semibold text-on-dark">
           Código: {code}
@@ -493,14 +487,15 @@ const RoletaSection = ({
           <LockedPanel onHaveCode={onHaveCode} />
         ) : null}
 
-        {participation.status === "validating" ||
-        participation.status === "not_released" ||
-        participation.status === "used" ||
-        participation.status === "error" ? (
+        {spinPhase !== "won" &&
+        (participation.status === "validating" ||
+          participation.status === "used" ||
+          participation.status === "canceled" ||
+          participation.status === "error") ? (
           <StatusMessage participation={participation} />
         ) : null}
 
-        {!wheelLocked && spinPhase === "won" ? (
+        {spinPhase === "won" ? (
           <WonPanel participation={participation} prizeName={prizeName} />
         ) : null}
       </div>
@@ -628,6 +623,22 @@ const CampaignFooter = ({ link }: { link: string }) => (
 /* Página                                                              */
 /* ------------------------------------------------------------------ */
 
+/** Converte o prêmio devolvido pelo backend no índice desenhado na roleta. */
+const prizeIndex = (id: string | null, position: number | null): number | null => {
+  if (id) {
+    const index = CAMPAIGN_PRIZES.findIndex((prize) => prize.id === id);
+    if (index >= 0) return index;
+  }
+  if (
+    typeof position === "number" &&
+    position >= 0 &&
+    position < CAMPAIGN_PRIZES.length
+  ) {
+    return position;
+  }
+  return null;
+};
+
 const ClientePremiado = () => {
   const source = useMemo(getSource, []);
   const link = useMemo(() => campaignLink(source), [source]);
@@ -637,6 +648,7 @@ const ClientePremiado = () => {
     code: null,
     name: null,
     result: null,
+    message: null,
   });
   const [spinPhase, setSpinPhase] = useState<SpinPhase>("idle");
   const [targetIndex, setTargetIndex] = useState<number | null>(null);
@@ -647,45 +659,135 @@ const ClientePremiado = () => {
   const wheelLocked = participation.status !== "valid";
 
   /**
-   * Validação da participação. NO FUTURO este trecho será substituído por uma
-   * chamada ao backend (validar código, verificar status/uso e recuperar
-   * resultado já registrado). O resultado definitivo NUNCA é decidido aqui.
+   * Validação da participação no backend. O servidor informa apenas o estado
+   * registrado do código — o resultado definitivo NUNCA é decidido aqui.
    */
-  const validateCode = useCallback((raw: string) => {
+  const validateCode = useCallback(async (raw: string) => {
     const code = raw.trim().toUpperCase();
     if (!code) return;
+
     setCodeDialogOpen(false);
-    setParticipation({ status: "validating", code, name: null, result: null });
-    window.setTimeout(() => {
-      setParticipation((prev) =>
-        prev.code === code ? { ...prev, status: "not_released" } : prev,
-      );
-    }, 1400);
+    setCodeInput(code);
+    setSpinPhase("idle");
+    setTargetIndex(null);
+    setParticipation({ status: "validating", code, name: null, result: null, message: null });
+
+    const result = await validateParticipation(code);
+
+    if (!result.ok || !result.state) {
+      setParticipation({
+        status: "error",
+        code,
+        name: null,
+        result: null,
+        message:
+          result.message ??
+          "Não foi possível validar sua participação agora. Tente novamente em instantes.",
+      });
+      return;
+    }
+
+    if (result.state === "not_found") {
+      setParticipation({
+        status: "error",
+        code,
+        name: null,
+        result: null,
+        message: "Código não encontrado. Confira o código que a LH Prime enviou para você.",
+      });
+      return;
+    }
+
+    if (result.state === "cancelado") {
+      setParticipation({
+        status: "canceled",
+        code,
+        name: result.firstName ?? null,
+        result: null,
+        message: "Esta participação foi cancelada. Fale com a LH Prime para mais informações.",
+      });
+      return;
+    }
+
+    if (result.state === "liberado") {
+      if (!result.spinEnabled) {
+        setParticipation({
+          status: "error",
+          code,
+          name: result.firstName ?? null,
+          result: null,
+          message:
+            "Sua participação está confirmada, mas a roleta ainda não foi liberada pela LH Prime. Volte em breve com o mesmo link.",
+        });
+        return;
+      }
+      setParticipation({
+        status: "valid",
+        code,
+        name: result.firstName ?? null,
+        result: null,
+        message: null,
+      });
+      return;
+    }
+
+    // premiado ou entregue — resultado já registrado no backend, sem novo giro
+    setParticipation({
+      status: "used",
+      code,
+      name: result.firstName ?? null,
+      result: result.prizeName ?? null,
+      message:
+        result.state === "entregue"
+          ? "Seu prêmio já consta como entregue pela LH Prime."
+          : "Este código já foi utilizado e o resultado está registrado.",
+    });
+    setTargetIndex(prizeIndex(result.prizeId ?? null, null));
+    setSpinPhase("won");
   }, []);
 
-  // Preparado para /cliente-premiado?codigo=CODIGO
+  // Link individual: /cliente-premiado?codigo=CODIGO
   useEffect(() => {
     const codigo = new URLSearchParams(window.location.search).get("codigo");
-    if (codigo) validateCode(codigo);
+    if (codigo) void validateCode(codigo);
   }, [validateCode]);
 
   /**
-   * Giro da roleta — apenas alcançável com participação válida (futuro backend).
-   * A animação representa o resultado recebido do sistema.
+   * Giro da roleta — apenas com participação liberada. O backend sorteia,
+   * registra o resultado e devolve o prêmio; a animação só representa isso.
    */
-  const handleSpin = useCallback(() => {
+  const handleSpin = useCallback(async () => {
+    const code = participation.code;
+    if (!code || spinPhase === "spinning") return;
+
     setSpinPhase("spinning");
-    // FUTURO: o backend retorna o índice/resultado e este trecho marca o uso.
-  }, []);
+    const outcome = await spinParticipation(code);
+
+    if (!outcome.ok) {
+      setSpinPhase("idle");
+      setParticipation((prev) => ({
+        ...prev,
+        status: outcome.error === "cancelled" ? "canceled" : "error",
+        message: outcome.message ?? "Não foi possível realizar o giro agora. Tente novamente.",
+      }));
+      return;
+    }
+
+    setParticipation((prev) => ({
+      ...prev,
+      result: outcome.prizeName ?? null,
+      name: outcome.firstName ?? prev.name,
+    }));
+    setTargetIndex(prizeIndex(outcome.prizeId ?? null, outcome.position ?? null));
+  }, [participation.code, spinPhase]);
 
   const handleSpinComplete = useCallback(() => {
     setSpinPhase("won");
-    // FUTURO: registrar o resultado no backend (participação usada).
   }, []);
 
   const handleSubmitCode = (value: string) => {
     if (!value.trim()) return;
-    validateCode(value);
+    void validateCode(value);
   };
 
   return (
