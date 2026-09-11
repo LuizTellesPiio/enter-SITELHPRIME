@@ -3504,6 +3504,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_exists: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
       award_participation: {
         Args: { p_code: string }
         Returns: {

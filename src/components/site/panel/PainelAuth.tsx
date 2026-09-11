@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, KeyRound, Loader2, LogIn, ShieldCheck, UserPlus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -47,6 +47,30 @@ export const PainelAuth = () => {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "error" | "success"; text: string } | null>(null);
+  const [signupAvailable, setSignupAvailable] = useState<boolean | null>(null);
+
+  // O cadastro do PRIMEIRO administrador só existe enquanto não há admin.
+  // Com um admin já criado, o cadastro fica fechado (decisão vem do backend).
+  useEffect(() => {
+    let active = true;
+    supabase
+      .rpc("admin_exists")
+      .then(({ data, error }) => {
+        if (!active) return;
+        setSignupAvailable(error ? false : data === false);
+      })
+      .catch(() => {
+        if (active) setSignupAvailable(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Segurança: se o cadastro inicial está fechado, o modo signup nunca fica ativo.
+  useEffect(() => {
+    if (mode === "signup" && signupAvailable === false) setMode("login");
+  }, [mode, signupAvailable]);
 
   const copy = COPY[mode];
 
@@ -181,14 +205,16 @@ export const PainelAuth = () => {
           <div className="mt-6 flex flex-col gap-3 border-t border-border/70 pt-5">
             {mode === "login" ? (
               <>
-                <button
-                  type="button"
-                  onClick={() => switchMode("signup")}
-                  className="flex items-center gap-2 text-left text-sm font-medium text-primary underline-offset-4 hover:underline"
-                >
-                  <UserPlus className="size-4" />
-                  Primeiro acesso? Criar a conta de administrador
-                </button>
+                {signupAvailable === true ? (
+                  <button
+                    type="button"
+                    onClick={() => switchMode("signup")}
+                    className="flex items-center gap-2 text-left text-sm font-medium text-primary underline-offset-4 hover:underline"
+                  >
+                    <UserPlus className="size-4" />
+                    Primeiro acesso? Criar a conta de administrador
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => switchMode("reset")}
