@@ -30,7 +30,7 @@ import {
 } from "@/data/campaign";
 import { INSTAGRAM_HANDLE, INSTAGRAM_URL } from "@/data/site";
 import { spinParticipation, validateParticipation } from "@/lib/campaign-api";
-import { buildWhatsAppLink } from "@/lib/whatsapp";
+import { buildWhatsAppLink, WHATSAPP_DISPLAY } from "@/lib/whatsapp";
 
 /* ------------------------------------------------------------------ */
 /* Dados e helpers da campanha                                         */
@@ -64,14 +64,19 @@ Origem: ${source}`,
       )
     : buildWhatsAppLink(CAMPAIGN_INTRO);
 
+/** Mensagem do cliente para a LH Prime depois de girar (destino: WhatsApp oficial). */
 const buildResultLink = (code: string, prize: string): string =>
   buildWhatsAppLink(
-    `Olá! Participei do Cliente Premiado LH Prime. 🎁
+    `🎁 Olá, LH Prime!
+
+Acabei de participar do Cliente Premiado.
 
 Código: ${code}
-Resultado: ${prize}
+Prêmio: ${prize}
 
-Gostaria de receber as orientações para receber meu prêmio.`,
+Gostaria de receber as orientações para retirar/receber meu prêmio.
+
+Obrigado!`,
   );
 
 const STEPS = [
@@ -594,7 +599,7 @@ const CampaignFooter = ({ link }: { link: string }) => (
             className="flex w-fit items-center gap-2 text-sm text-on-dark-muted transition-colors hover:text-white"
           >
             <MessageCircle className="size-4 text-emerald" />
-            WhatsApp: (22) 99253-8926
+            WhatsApp: {WHATSAPP_DISPLAY}
           </a>
           <a
             href={INSTAGRAM_URL}

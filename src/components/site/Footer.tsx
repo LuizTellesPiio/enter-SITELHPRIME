@@ -1,7 +1,7 @@
 import { Instagram, MapPin, MessageCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { NAV_LINKS, INSTAGRAM_URL, CITY } from "@/data/site";
-import { DEFAULT_WHATSAPP_LINK } from "@/lib/whatsapp";
+import { DEFAULT_WHATSAPP_LINK, WHATSAPP_DISPLAY } from "@/lib/whatsapp";
 
 export const Footer = () => {
   return (
@@ -49,7 +49,7 @@ export const Footer = () => {
               className="flex w-fit items-center gap-2 text-sm text-on-dark-muted transition-colors hover:text-white"
             >
               <MessageCircle className="size-4 text-emerald" />
-              WhatsApp: (22) 99253-8926
+              WhatsApp: {WHATSAPP_DISPLAY}
             </a>
             <a
               href={INSTAGRAM_URL}
