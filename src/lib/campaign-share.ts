@@ -3,6 +3,8 @@
 /* O link usa sempre o domínio atual — nada de domínio fixo no código. */
 /* ------------------------------------------------------------------ */
 
+import { buildWhatsAppLinkTo } from "@/lib/whatsapp";
+
 export const PARTICIPATION_PATH = "/cliente-premiado";
 
 /** Link individual no domínio atual; preserva a origem quando informada. */
@@ -45,7 +47,7 @@ LH Prime / Da primeira ideia à última demão.`;
 export const buildClientWhatsAppLink = (phone: string, message: string): string => {
   const number = whatsappNumber(phone);
   if (!number) return "";
-  return `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
+  return buildWhatsAppLinkTo(number, message);
 };
 
 /** Formata o telefone para exibição no painel. */

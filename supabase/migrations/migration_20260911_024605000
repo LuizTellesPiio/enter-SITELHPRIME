@@ -1,0 +1,19 @@
+-- TESTE 6: save-prizes mantem quantidade, peso e ativo
+select public.save_prize_config('[{"id":"vale-10","enabled":false,"quantity":5,"granted":2,"weight":3},{"id":"vale-20","enabled":true,"quantity":4,"granted":0,"weight":0.5}]'::jsonb);
+
+-- TESTES 3,4,5: cancelamento por status
+insert into public.participations (code, customer_name, customer_phone, budget_reference, status, released_at)
+values ('LH-TEST04', 'Cancelavel Liberado', '22966665555', 'Orcamento teste', 'LIBERADO', now()),
+       ('LH-TEST05', 'Nao Cancelavel', '22955554444', 'Orcamento teste', 'LIBERADO', now())
+on conflict (code) do nothing;
+
+-- 3) LIBERADO pode cancelar
+select public.cancel_participation('LH-TEST04') as teste3_liberado;
+
+-- 4) PREMIADO: apos o giro o cancelamento normal nao devolve estoque
+select public.award_participation('LH-TEST05');
+select public.cancel_participation('LH-TEST05') as teste4_premiado;
+
+-- 5) ENTREGUE nao pode cancelar
+select public.deliver_participation('LH-TEST05');
+select public.cancel_participation('LH-TEST05') as teste5_entregue;

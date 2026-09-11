@@ -1,0 +1,8 @@
+-- remove APENAS os registros de verificacao criados nesta rodada
+-- (a participacao real LH-Q2SBXW permanece intacta)
+delete from public.participations where code in ('LH-TEST04','LH-TEST05');
+
+-- o teste de save-prizes sobrescreveu estas duas linhas: volta ao padrao da campanha
+update public.prizes
+   set enabled = true, quantity = 1, granted = 0, weight = 1, updated_at = now()
+ where id in ('vale-10','vale-20');

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertCircle, Loader2, Save, ShieldCheck } from "lucide-react";
+import { AlertCircle, Loader2, Lock, Save, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,8 +12,9 @@ interface PrizeRow {
   name: string;
   enabled: boolean;
   quantity: string;
-  granted: string;
   weight: string;
+  /** Somente leitura — atualizado pelo backend a cada giro concedido. */
+  granted: number;
 }
 
 const toRows = (prizes: PrizeRecord[]): PrizeRow[] =>
@@ -22,8 +23,8 @@ const toRows = (prizes: PrizeRecord[]): PrizeRow[] =>
     name: prize.name,
     enabled: prize.enabled,
     quantity: String(prize.quantity),
-    granted: String(prize.granted),
     weight: String(prize.weight),
+    granted: prize.granted,
   }));
 
 const toNumber = (value: string): number | null => {
@@ -33,8 +34,7 @@ const toNumber = (value: string): number | null => {
 
 const remainingOf = (row: PrizeRow): number => {
   const quantity = toNumber(row.quantity) ?? 0;
-  const granted = toNumber(row.granted) ?? 0;
-  return Math.max(quantity - granted, 0);
+  return Math.max(quantity - row.granted, 0);
 };
 
 export const PremiosPanel = () => {
@@ -76,15 +76,10 @@ export const PremiosPanel = () => {
 
     for (const row of rows) {
       const quantity = toNumber(row.quantity);
-      const granted = toNumber(row.granted);
       const weight = toNumber(row.weight);
 
       if (quantity === null || quantity < 0 || !Number.isInteger(quantity)) {
         setFeedback({ type: "error", text: `Quantidade disponível inválida em "${row.name}".` });
-        return;
-      }
-      if (granted === null || granted < 0 || !Number.isInteger(granted)) {
-        setFeedback({ type: "error", text: `Quantidade concedida inválida em "${row.name}".` });
         return;
       }
       if (weight === null || weight <= 0) {
@@ -92,7 +87,8 @@ export const PremiosPanel = () => {
         return;
       }
 
-      payload.push({ id: row.id, enabled: row.enabled, quantity, granted, weight });
+      // "Concedida" nunca vem do formulário: segue o valor atual do backend.
+      payload.push({ id: row.id, enabled: row.enabled, quantity, weight, granted: row.granted });
     }
 
     if (!payload.some((prize) => prize.enabled)) {
@@ -204,16 +200,20 @@ export const PremiosPanel = () => {
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor={`granted-${row.id}`} className="text-xs">
-                    Concedida
-                  </Label>
-                  <Input
-                    id={`granted-${row.id}`}
-                    inputMode="numeric"
-                    value={row.granted}
-                    onChange={(event) => update(row.id, { granted: event.target.value })}
-                    className="h-10"
-                  />
+                  <span className="text-xs font-medium text-foreground">Concedida</span>
+                  <div
+                    aria-readonly="true"
+                    title="Atualizado automaticamente pelo sistema"
+                    className="flex h-10 cursor-not-allowed items-center justify-between gap-2 rounded-md border border-border bg-muted px-3 text-muted-foreground"
+                  >
+                    <span className="font-display text-sm font-bold text-foreground">
+                      {row.granted}
+                    </span>
+                    <Lock className="size-3.5" aria-hidden="true" />
+                  </div>
+                  <p className="text-[0.7rem] leading-snug text-muted-foreground">
+                    Somente leitura — atualizado pelo sistema
+                  </p>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor={`weight-${row.id}`} className="text-xs">

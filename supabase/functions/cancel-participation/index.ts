@@ -80,6 +80,44 @@ Deno.serve(async (req) => {
   const code = normalizeCode(body.code);
   if (!code) return json({ error: "invalid_code" }, 400);
 
+  // O cancelamento comum só existe para participação ainda LIBERADO.
+  // Depois que o cliente girou, o resultado é definitivo e não há devolução
+  // de estoque por este caminho.
+  const { data: current, error: readError } = await auth.supabase
+    .from("participations")
+    .select("status")
+    .eq("code", code)
+    .maybeSingle();
+
+  if (readError) {
+    console.error("cancel-participation: falha ao consultar", readError.message);
+    return json({ error: "lookup_failed", message: "Não foi possível verificar a participação." }, 500);
+  }
+
+  if (!current) return json({ error: "not_found", message: "Participação não encontrada." }, 404);
+
+  if (current.status === "PREMIADO") {
+    return json(
+      {
+        error: "cannot_cancel_awarded",
+        message:
+          "Esta participação já foi premiada e não pode ser cancelada pelo fluxo normal. Fale com o responsável pela campanha.",
+      },
+      409,
+    );
+  }
+
+  if (current.status === "ENTREGUE") {
+    return json(
+      { error: "already_delivered", message: "Uma participação já entregue não pode ser cancelada." },
+      409,
+    );
+  }
+
+  if (current.status === "CANCELADO") {
+    return json({ error: "already_cancelled", message: "Esta participação já foi cancelada." }, 409);
+  }
+
   const { data, error } = await auth.supabase.rpc("cancel_participation", { p_code: code });
 
   if (error) {

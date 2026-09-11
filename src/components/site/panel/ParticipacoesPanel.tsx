@@ -328,7 +328,7 @@ export const ParticipacoesPanel = () => {
                     </Button>
                   ) : null}
 
-                  {record.status === "LIBERADO" || record.status === "PREMIADO" ? (
+                  {record.status === "LIBERADO" ? (
                     <Button
                       type="button"
                       variant="ghost"
