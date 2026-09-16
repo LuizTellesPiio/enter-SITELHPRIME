@@ -1,0 +1,13 @@
+create table if not exists public.ai_generations (
+  id uuid primary key default gen_random_uuid(),
+  session_id text not null,
+  task_id text,
+  status text not null check (status in ('processing','success','error')),
+  error_code text,
+  image_url text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists ai_generations_session_idx on public.ai_generations (session_id, created_at desc);
+
+alter table public.ai_generations enable row level security;
