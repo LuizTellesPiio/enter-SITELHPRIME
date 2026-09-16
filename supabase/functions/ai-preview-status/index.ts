@@ -102,12 +102,14 @@ Deno.serve(async (req) => {
   const resultUrl = asText(data?.response ? (data.response as Record<string, unknown>).resultImageUrl : null);
   const errorMessage = asText(data?.errorMessage) ?? asText(data?.errorCode);
 
+  /* Só tratamos sinais explícitos de fim: URL pronta (sucesso) ou mensagem
+     de erro. Enquanto não houver nenhum dos dois, mantemos "processing". */
   if (resultUrl) {
     await supabase.from("ai_generations").update({ status: "success", image_url: resultUrl }).eq("id", row.id);
     return json({ state: "success", imageUrl: resultUrl });
   }
 
-  if (errorMessage || (typeof data?.successFlag === "number" && data.successFlag !== 1)) {
+  if (errorMessage) {
     console.error("ai-preview-status: tarefa falhou na Kie", JSON.stringify(payload));
     await supabase.from("ai_generations").update({ status: "error", error_code: "kie_failed" }).eq("id", row.id);
     return json({ state: "error", message: "A inteligência artificial não conseguiu gerar a prévia. Tente novamente." });

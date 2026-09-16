@@ -1,0 +1,1 @@
+update ai_generations set status = 'processing', error_code = null where id = '2f649cad-713a-4ab1-9be2-d10fcc6e7802';

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Check, Heart, MessageCircle, X } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ArrowRight, Check, Heart, MessageCircle, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SectionHeader } from "./SectionHeader";
 import {
@@ -160,6 +161,34 @@ export const PaintPreview = () => {
           title="Encontre a cor certa para o seu ambiente"
           description="Explore diferentes famílias de cores, compare suas favoritas e encontre inspiração para sua próxima transformação."
         />
+
+        {/* Acesso à LH Prime IA — simulação realista a partir de uma foto real */}
+        <Link
+          to="/previa-ia"
+          data-cta="previa-ia-acesso"
+          className="group flex w-full flex-col items-center justify-between gap-4 overflow-hidden rounded-3xl gradient-emerald p-6 text-white shadow-elegant transition-transform duration-200 hover:-translate-y-0.5 sm:flex-row sm:gap-6 sm:p-7"
+        >
+          <div className="flex flex-col items-center gap-2 text-center sm:flex-row sm:gap-4 sm:text-left">
+            <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 backdrop-blur-sm">
+              <Sparkles className="size-6" />
+            </span>
+            <div className="flex flex-col gap-1">
+              <span className="font-display text-lg font-bold sm:text-xl">
+                LH Prime IA — Visualize seu ambiente
+              </span>
+              <span className="max-w-xl text-sm leading-relaxed text-white/85">
+                Envie uma foto real do seu espaço e veja como ele fica com outra cor, textura ou
+                acabamento — gerado por inteligência artificial, de graça.
+              </span>
+            </div>
+          </div>
+          <Button asChild variant="hero-secondary" size="lg" className="shrink-0">
+            <span>
+              Visualizar com IA
+              <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+            </span>
+          </Button>
+        </Link>
 
         <div className="grid w-full gap-8 lg:grid-cols-[1.15fr_1fr] lg:gap-10">
           {/* Seleção */}
