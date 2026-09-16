@@ -33,7 +33,7 @@ const serviceClient = () =>
   );
 
 /* Configuração — ajuste simples de limites e modelo. */
-const MAX_GENERATIONS_PER_SESSION = 3;
+const MAX_GENERATIONS_PER_SESSION = 10;
 const MAX_PROMPT_LENGTH = 500;
 const MIN_PROMPT_LENGTH = 3;
 /** Tamanho máximo da imagem decodificada (a prévia já chega reduzida). */

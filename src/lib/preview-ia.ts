@@ -8,7 +8,7 @@ import { buildWhatsAppLink } from "./whatsapp";
 /* ------------------------------------------------------------------ */
 
 /** Limite desta versão: fácil de ajustar aqui ou no backend. */
-export const MAX_GENERATIONS_PER_SESSION = 3;
+export const MAX_GENERATIONS_PER_SESSION = 10;
 
 export const IA_WHATSAPP_MESSAGE =
   "Olá, Luiz! Fiz uma simulação do meu ambiente através da LH Prime IA e gostaria de solicitar um orçamento para realizar esse projeto.";
