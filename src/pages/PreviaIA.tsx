@@ -3,10 +3,12 @@ import { Link } from "react-router-dom";
 import {
   AlertCircle,
   ArrowRight,
+  Camera,
   CheckCircle2,
   ChevronsLeftRight,
   Download,
   ImagePlus,
+  Images,
   Loader2,
   MessageCircle,
   RefreshCcw,
@@ -180,6 +182,14 @@ const PreviaIA = () => {
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  /** Dispositivo de toque: recebe os botões "Tirar foto" e "Escolher da galeria". */
+  const [isTouch] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(pointer: coarse)").matches,
+  );
 
   const resetToForm = () => {
     setPhase("form");
@@ -317,6 +327,14 @@ const PreviaIA = () => {
                   className="hidden"
                   onChange={(e) => void handleFile(e.target.files?.[0])}
                 />
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={(e) => void handleFile(e.target.files?.[0])}
+                />
                 {imageDataUrl ? (
                   <div className="relative overflow-hidden rounded-2xl border border-border/70 bg-secondary">
                     <img
@@ -339,7 +357,42 @@ const PreviaIA = () => {
                       {imageName || "Sua foto"}
                     </span>
                   </div>
+                ) : isTouch ? (
+                  /* Mobile: duas opções grandes e fáceis de tocar */
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => cameraInputRef.current?.click()}
+                      className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-primary/25 bg-secondary/50 p-5 text-center transition-all duration-200 active:scale-[0.98]"
+                    >
+                      <span className="flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+                        <Camera className="size-7" />
+                      </span>
+                      <span className="font-display text-base font-bold uppercase tracking-wide text-primary">
+                        Tirar foto
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        Use a câmera do celular
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-primary/25 bg-secondary/50 p-5 text-center transition-all duration-200 active:scale-[0.98]"
+                    >
+                      <span className="flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+                        <Images className="size-7" />
+                      </span>
+                      <span className="font-display text-base font-bold uppercase tracking-wide text-primary">
+                        Escolher da galeria
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        JPG · PNG · WEBP · até 15MB
+                      </span>
+                    </button>
+                  </div>
                 ) : (
+                  /* Desktop: mantém o upload por clique/arrastar */
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
