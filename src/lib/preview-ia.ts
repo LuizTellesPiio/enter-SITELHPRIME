@@ -41,12 +41,18 @@ export const IA_SUGGESTIONS: Record<IAPromptPresetKey, string> = {
 /**
  * Instruções técnicas internas, adicionadas ao prompt enviado à IA.
  * Não aparecem para o usuário. "other" usa apenas a descrição do cliente.
+ *
+ * "cement-wash" é tratada à parte: o nome visível ("Cimento queimado") NUNCA
+ * entra no prompt enviado ao modelo. A instrução é o prompt completo, escrita
+ * sem as palavras "queimado"/"queimada"/"burned"/"burnt"/"fire"/"fogo"/
+ * "fuligem"/"smoke" ou termos relacionados (enxugada para caber no limite de
+ * 500 caracteres do campo prompt no backend).
  */
 const IA_TECHNICAL_INSTRUCTIONS: Record<IAPromptPresetKey, string> = {
   "wall-color":
     "Alterar somente a pintura/cor das paredes conforme solicitado pelo usuário. Preservar textura natural da superfície, iluminação, sombras e reflexos para manter resultado fotorealista. Não alterar nenhum outro elemento.",
   "cement-wash":
-    "Aplicar acabamento decorativo de cimento queimado contemporâneo nas paredes solicitadas. Revestimento cimentício liso e realista, em cinza médio, com nuances tonais sutis do cimento queimado brasileiro. NÃO interpretar 'queimado' como fogo. NÃO adicionar queimaduras, fuligem, fumaça, carvão, manchas pretas, danos ou sinais de incêndio. Preservar portas, janelas, piso, teto, tomadas, interruptores, móveis, objetos, arquitetura, perspectiva e iluminação.",
+    "Transform only the requested wall surfaces into a sophisticated architectural cement finish. Use a smooth mineral cement/plaster look in neutral medium gray, with subtle cloudy tonal variation, natural trowel marks, low contrast and matte finish. Keep it clean, uniform and professional. Preserve the existing room geometry, doors, door frames, windows, outlets, switches, floor, ceiling, furniture, objects, perspective, lighting and camera framing. Modify only the wall surface finish.",
   texture:
     "Aplicar textura decorativa arquitetônica profissional somente nas paredes solicitadas, com acabamento uniforme e realista de pintura/revestimento. Não modificar arquitetura, portas, janelas, piso, teto ou objetos.",
   facade:
@@ -70,6 +76,10 @@ const truncateOnWord = (value: string, max: number): string => {
  * (O prompt global de preservação é acrescentado pelo backend.)
  * O backend limita o prompt a 500 caracteres: a instrução é preservada
  * por completo e, se necessário, apenas o final do pedido é encurtado.
+ *
+ * Exceção "cement-wash": o prompt enviado é SOMENTE a instrução técnica. O
+ * nome "Cimento queimado" e qualquer texto do usuário NÃO são concatenados,
+ * impedindo que palavras como "queimado"/"fogo" cheguem ao modelo.
  */
 export const buildInternalPrompt = (
   userText: string,
@@ -78,6 +88,7 @@ export const buildInternalPrompt = (
   const text = userText.trim();
   const instruction = preset ? IA_TECHNICAL_INSTRUCTIONS[preset].trim() : "";
   if (!instruction) return text;
+  if (preset === "cement-wash") return instruction;
   const combined = `${instruction} ${text}`.trim();
   if (combined.length <= 500) return combined;
   return `${instruction} ${truncateOnWord(text, 500 - instruction.length - 1)}`.trim();
