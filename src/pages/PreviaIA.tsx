@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
+  buildInternalPrompt,
   IA_WHATSAPP_LINK,
   IA_SUGGESTIONS,
   MAX_GENERATIONS_PER_SESSION,
@@ -26,6 +27,7 @@ import {
   getGenerationStatus,
   rawFileIsAcceptable,
   sleep,
+  type IAPromptPresetKey,
 } from "@/lib/preview-ia";
 import { cn } from "@/lib/utils";
 
@@ -183,6 +185,10 @@ const PreviaIA = () => {
   const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const promptRef = useRef<HTMLTextAreaElement>(null);
+
+  /** Sugestão escolhida: define a instrução técnica interna enviada à IA. */
+  const [suggestionKey, setSuggestionKey] = useState<IAPromptPresetKey | null>(null);
 
   /** Dispositivo de toque: recebe os botões "Tirar foto" e "Escolher da galeria". */
   const [isTouch] = useState(
@@ -226,7 +232,10 @@ const PreviaIA = () => {
     setPhase("generating");
     setErrorMessage("");
 
-    const created = await createGeneration(prompt.trim(), imageDataUrl);
+    const created = await createGeneration(
+      buildInternalPrompt(prompt.trim(), suggestionKey),
+      imageDataUrl,
+    );
     if (!created.ok || !created.generationId) {
       setErrorMessage(
         created.message ?? "Não foi possível gerar a prévia agora. Tente novamente.",
@@ -438,25 +447,48 @@ const PreviaIA = () => {
                   Passo 2 · O que você quer mudar?
                 </label>
                 <textarea
+                  ref={promptRef}
                   id="ia-prompt"
                   value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setPrompt(value);
+                    setSuggestionKey((prev) => {
+                      if (!prev || prev === "other") return prev;
+                      return value
+                        .toLowerCase()
+                        .includes(IA_SUGGESTIONS[prev].toLowerCase())
+                        ? prev
+                        : null;
+                    });
+                  }}
                   placeholder={PROMPT_PLACEHOLDER}
                   maxLength={500}
                   rows={4}
                   className="w-full resize-none rounded-2xl border border-border bg-background px-4 py-3 text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/70 focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/15"
                 />
                 <div className="flex flex-wrap gap-2">
-                  {IA_SUGGESTIONS.map((suggestion) => (
-                    <button
-                      key={suggestion}
-                      type="button"
-                      onClick={() => setPrompt(suggestion)}
-                      className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:border-emerald/40 hover:bg-emerald/5"
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
+                  {(Object.entries(IA_SUGGESTIONS) as [IAPromptPresetKey, string][]).map(
+                    ([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => {
+                          if (key === "other") {
+                            /* Outra ideia: o cliente escreve a própria descrição. */
+                            setSuggestionKey("other");
+                            promptRef.current?.focus();
+                            return;
+                          }
+                          setPrompt(label);
+                          setSuggestionKey(key);
+                        }}
+                        className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:border-emerald/40 hover:bg-emerald/5"
+                      >
+                        {label}
+                      </button>
+                    ),
+                  )}
                 </div>
               </div>
 

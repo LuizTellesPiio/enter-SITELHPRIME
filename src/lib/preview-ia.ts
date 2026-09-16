@@ -20,14 +20,68 @@ const MAX_IMAGE_DIMENSION = 1536;
 /** Tamanho máximo aceito do arquivo original (antes da redução). */
 const MAX_RAW_FILE_BYTES = 15 * 1024 * 1024;
 
-export const IA_SUGGESTIONS = [
-  "Trocar a cor das paredes",
-  "Cimento queimado",
-  "Textura",
-  "Fachada",
-  "Modernizar o ambiente",
-  "Outra ideia",
-] as const;
+/** Sugestões rápidas (rótulos exibidos na interface). Cada uma tem uma instrução técnica interna. */
+export type IAPromptPresetKey =
+  | "wall-color"
+  | "cement-wash"
+  | "texture"
+  | "facade"
+  | "modernize"
+  | "other";
+
+export const IA_SUGGESTIONS: Record<IAPromptPresetKey, string> = {
+  "wall-color": "Trocar a cor das paredes",
+  "cement-wash": "Cimento queimado",
+  texture: "Textura",
+  facade: "Fachada",
+  modernize: "Modernizar o ambiente",
+  other: "Outra ideia",
+};
+
+/**
+ * Instruções técnicas internas, adicionadas ao prompt enviado à IA.
+ * Não aparecem para o usuário. "other" usa apenas a descrição do cliente.
+ */
+const IA_TECHNICAL_INSTRUCTIONS: Record<IAPromptPresetKey, string> = {
+  "wall-color":
+    "Alterar somente a pintura/cor das paredes conforme solicitado pelo usuário. Preservar textura natural da superfície, iluminação, sombras e reflexos para manter resultado fotorealista. Não alterar nenhum outro elemento.",
+  "cement-wash":
+    "Aplicar acabamento decorativo de cimento queimado contemporâneo nas paredes solicitadas. Revestimento cimentício liso e realista, em cinza médio, com nuances tonais sutis do cimento queimado brasileiro. NÃO interpretar 'queimado' como fogo. NÃO adicionar queimaduras, fuligem, fumaça, carvão, manchas pretas, danos ou sinais de incêndio. Preservar portas, janelas, piso, teto, tomadas, interruptores, móveis, objetos, arquitetura, perspectiva e iluminação.",
+  texture:
+    "Aplicar textura decorativa arquitetônica profissional somente nas paredes solicitadas, com acabamento uniforme e realista de pintura/revestimento. Não modificar arquitetura, portas, janelas, piso, teto ou objetos.",
+  facade:
+    "Realizar somente alterações de pintura, cores, revestimentos e acabamentos solicitados na fachada existente. Preservar formato da construção, telhado, portas, janelas, portões, calçada, proporções e perspectiva. Não redesenhar ou substituir o imóvel.",
+  modernize:
+    "Modernizar prioritariamente através de pintura, paleta de cores e acabamentos decorativos. Preservar a arquitetura e os principais elementos existentes. Não transformar o ambiente em outro imóvel.",
+  other: "",
+};
+
+/** Encurta o pedido em um limite de caracteres sem cortar palavras no meio. */
+const truncateOnWord = (value: string, max: number): string => {
+  if (value.length <= max) return value;
+  const cut = value.slice(0, max);
+  const lastSpace = cut.lastIndexOf(" ");
+  return (lastSpace > max * 0.6 ? cut.slice(0, lastSpace) : cut).trim();
+};
+
+/**
+ * Monta o prompt interno enviado à IA:
+ * INSTRUÇÃO TÉCNICA DA SUGESTÃO + PEDIDO ESCRITO PELO CLIENTE.
+ * (O prompt global de preservação é acrescentado pelo backend.)
+ * O backend limita o prompt a 500 caracteres: a instrução é preservada
+ * por completo e, se necessário, apenas o final do pedido é encurtado.
+ */
+export const buildInternalPrompt = (
+  userText: string,
+  preset: IAPromptPresetKey | null | undefined,
+): string => {
+  const text = userText.trim();
+  const instruction = preset ? IA_TECHNICAL_INSTRUCTIONS[preset].trim() : "";
+  if (!instruction) return text;
+  const combined = `${instruction} ${text}`.trim();
+  if (combined.length <= 500) return combined;
+  return `${instruction} ${truncateOnWord(text, 500 - instruction.length - 1)}`.trim();
+};
 
 const SESSION_KEY = "lh_prime_ia_session";
 const SESSION_RE = /^[A-Za-z0-9_-]{8,64}$/;
