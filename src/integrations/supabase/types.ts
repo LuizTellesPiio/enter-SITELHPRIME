@@ -3392,9 +3392,11 @@ export type Database = {
       }
       ai_paint_colors: {
         Row: {
+          catalog_code: string | null
           created_at: string
           family: string
           hex: string | null
+          hex_is_derived: boolean
           id: string
           is_active: boolean
           is_featured: boolean
@@ -3410,9 +3412,11 @@ export type Database = {
           source_url: string | null
         }
         Insert: {
+          catalog_code?: string | null
           created_at?: string
           family: string
           hex?: string | null
+          hex_is_derived?: boolean
           id?: string
           is_active?: boolean
           is_featured?: boolean
@@ -3428,9 +3432,11 @@ export type Database = {
           source_url?: string | null
         }
         Update: {
+          catalog_code?: string | null
           created_at?: string
           family?: string
           hex?: string | null
+          hex_is_derived?: boolean
           id?: string
           is_active?: boolean
           is_featured?: boolean

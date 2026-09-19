@@ -41,7 +41,15 @@ export interface AIColor {
   hex: string | null;
   is_featured: boolean;
   sort_order: number;
+  /** Código secundário de catálogo/leque (principalmente Coral). */
+  catalog_code?: string | null;
 }
+
+/** Código exibido no card: Sherwin-Williams aparece como "SW 7005". */
+export const displayColorCode = (color: Pick<AIColor, "manufacturer" | "manufacturer_code">): string =>
+  color.manufacturer === "Sherwin-Williams"
+    ? `SW ${color.manufacturer_code}`
+    : color.manufacturer_code;
 
 /**
  * Princípio da instrução de cor da Fase 2 (ainda não aplicado):
@@ -58,7 +66,9 @@ export const COLOR_INSTRUCTION_PRINCIPLE =
 export const fetchAIColors = async (): Promise<AIColor[]> => {
   const { data, error } = await supabase
     .from("ai_paint_colors")
-    .select("id, manufacturer, name, manufacturer_code, family, hex, is_featured, sort_order")
+    .select(
+      "id, manufacturer, name, manufacturer_code, catalog_code, family, hex, is_featured, sort_order",
+    )
     .eq("is_active", true)
     .order("manufacturer")
     .order("sort_order");
