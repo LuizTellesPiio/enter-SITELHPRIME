@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Check, Heart, MessageCircle, Sparkles, X } from "lucide-react";
+import { ArrowRight, Camera, Check, Heart, MessageCircle, Palette, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SectionHeader } from "./SectionHeader";
 import {
@@ -163,32 +163,64 @@ export const PaintPreview = () => {
         />
 
         {/* Acesso à LH Prime IA — simulação realista a partir de uma foto real */}
-        <Link
-          to="/previa-ia"
-          data-cta="previa-ia-acesso"
-          className="group flex w-full flex-col items-center justify-between gap-4 overflow-hidden rounded-3xl gradient-emerald p-6 text-white shadow-elegant transition-transform duration-200 hover:-translate-y-0.5 sm:flex-row sm:gap-6 sm:p-7"
-        >
-          <div className="flex flex-col items-center gap-2 text-center sm:flex-row sm:gap-4 sm:text-left">
-            <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 backdrop-blur-sm">
-              <Sparkles className="size-6" />
-            </span>
-            <div className="flex flex-col gap-1">
-              <span className="font-display text-lg font-bold sm:text-xl">
-                LH Prime IA — Visualize seu ambiente
+        <div className="flex w-full flex-col items-center gap-3">
+          <div className="relative w-full overflow-hidden rounded-3xl gradient-emerald p-7 text-white shadow-elegant sm:p-10">
+            <div className="pointer-events-none absolute -right-24 -top-24 size-72 rounded-full bg-white/10 blur-3xl" />
+            <div className="pointer-events-none absolute -bottom-24 -left-24 size-72 rounded-full bg-black/10 blur-3xl" />
+
+            <div className="relative flex flex-col items-center gap-6 text-center">
+              <span className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.18em] text-white backdrop-blur-sm">
+                <Sparkles className="size-3.5" />
+                LH Prime IA
               </span>
-              <span className="max-w-xl text-sm leading-relaxed text-white/85">
-                Envie uma foto real do seu espaço e veja como ele fica com outra cor, textura ou
-                acabamento — gerado por inteligência artificial, de graça.
-              </span>
+
+              <div className="flex flex-col items-center gap-2">
+                <h3 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
+                  Visualize antes de transformar.
+                </h3>
+                <p className="max-w-2xl text-sm leading-relaxed text-white/85 sm:text-base">
+                  Veja possibilidades para o seu ambiente antes mesmo da primeira demão. Envie
+                  uma foto, escolha cores e acabamentos e use a inteligência artificial da LH
+                  Prime para visualizar diferentes ideias para o seu projeto.
+                </p>
+              </div>
+
+              {/* Processo em 3 passos */}
+              <div className="flex w-full max-w-2xl flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-center sm:gap-2">
+                {[
+                  { icon: Camera, label: "Envie uma foto" },
+                  { icon: Palette, label: "Escolha o acabamento" },
+                  { icon: Sparkles, label: "Visualize com IA" },
+                ].map((step, index) => (
+                  <Fragment key={step.label}>
+                    <div className="flex flex-1 items-center justify-center gap-3 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 backdrop-blur-sm sm:flex-col sm:gap-2 sm:px-3 sm:py-4">
+                      <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-white/15">
+                        <step.icon className="size-5" />
+                      </span>
+                      <span className="text-sm font-bold text-white">{step.label}</span>
+                    </div>
+                    {index < 2 ? (
+                      <ArrowRight className="mx-auto hidden size-5 shrink-0 text-white/70 sm:block" />
+                    ) : null}
+                  </Fragment>
+                ))}
+              </div>
+
+              <Link to="/previa-ia" data-cta="previa-ia-acesso" className="group inline-flex">
+                <Button variant="hero-secondary" size="lg" className="px-8">
+                  Experimentar LH Prime IA
+                  <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+                </Button>
+              </Link>
             </div>
           </div>
-          <Button asChild variant="hero-secondary" size="lg" className="shrink-0">
-            <span>
-              Visualizar com IA
-              <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />
-            </span>
-          </Button>
-        </Link>
+
+          {/* Aviso discreto sobre as simulações */}
+          <p className="max-w-2xl text-center text-xs leading-relaxed text-muted-foreground">
+            As imagens são simulações geradas por inteligência artificial e podem apresentar
+            diferenças em relação às cores, texturas e acabamentos reais.
+          </p>
+        </div>
 
         <div className="grid w-full gap-8 lg:grid-cols-[1.15fr_1fr] lg:gap-10">
           {/* Seleção */}
