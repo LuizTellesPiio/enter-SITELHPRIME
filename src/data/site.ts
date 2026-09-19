@@ -205,7 +205,7 @@ export const NAV_LINKS = [
   { label: "Descontos", href: "#descontos" },
   { label: "Antes e Depois", href: "#antes-e-depois" },
   { label: "Galeria", href: "#galeria" },
-  { label: "Prévia de cor", href: "#previa" },
+  { label: "LH Prime IA", href: "#previa" },
   { label: "Processo", href: "#processo" },
   { label: "FAQ", href: "#faq" },
   { label: "Contato", href: "#contato" },
