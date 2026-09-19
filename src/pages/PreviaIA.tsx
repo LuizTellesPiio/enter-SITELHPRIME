@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AIColorPicker } from "@/components/site/AIColorPicker";
 import {
   buildInternalPrompt,
   IA_WHATSAPP_LINK,
@@ -190,6 +191,9 @@ const PreviaIA = () => {
   /** Sugestão escolhida: define a instrução técnica interna enviada à IA. */
   const [suggestionKey, setSuggestionKey] = useState<IAPromptPresetKey | null>(null);
 
+  /** Cor da biblioteca selecionada (Fase 2: enviada ao backend pelo id). */
+  const [selectedColorId, setSelectedColorId] = useState<string | null>(null);
+
   /** Dispositivo de toque: recebe os botões "Tirar foto" e "Escolher da galeria". */
   const [isTouch] = useState(
     () =>
@@ -235,6 +239,7 @@ const PreviaIA = () => {
     const created = await createGeneration(
       buildInternalPrompt(prompt.trim(), suggestionKey),
       imageDataUrl,
+      selectedColorId,
     );
     if (!created.ok || !created.generationId) {
       setErrorMessage(
@@ -438,13 +443,18 @@ const PreviaIA = () => {
                 )}
               </div>
 
+              {/* Passo 2 — Escolha uma cor (biblioteca técnica, Fase 1) */}
+              <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-secondary/40 p-4 sm:p-5">
+                <AIColorPicker selectedColorId={selectedColorId} onSelect={setSelectedColorId} />
+              </div>
+
               {/* Prompt */}
               <div className="flex flex-col gap-3">
                 <label
                   htmlFor="ia-prompt"
                   className="text-xs font-bold uppercase tracking-[0.18em] text-primary"
                 >
-                  Passo 2 · O que você quer mudar?
+                  Passo 3 · O que você quer mudar?
                 </label>
                 <textarea
                   ref={promptRef}

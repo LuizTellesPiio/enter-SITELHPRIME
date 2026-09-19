@@ -3390,6 +3390,63 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_paint_colors: {
+        Row: {
+          created_at: string
+          family: string
+          hex: string | null
+          id: string
+          is_active: boolean
+          is_featured: boolean
+          lrv: number | null
+          manufacturer: string
+          manufacturer_code: string
+          name: string
+          ncs: string | null
+          rgb_b: number
+          rgb_g: number
+          rgb_r: number
+          sort_order: number
+          source_url: string | null
+        }
+        Insert: {
+          created_at?: string
+          family: string
+          hex?: string | null
+          id?: string
+          is_active?: boolean
+          is_featured?: boolean
+          lrv?: number | null
+          manufacturer: string
+          manufacturer_code: string
+          name: string
+          ncs?: string | null
+          rgb_b: number
+          rgb_g: number
+          rgb_r: number
+          sort_order?: number
+          source_url?: string | null
+        }
+        Update: {
+          created_at?: string
+          family?: string
+          hex?: string | null
+          id?: string
+          is_active?: boolean
+          is_featured?: boolean
+          lrv?: number | null
+          manufacturer?: string
+          manufacturer_code?: string
+          name?: string
+          ncs?: string | null
+          rgb_b?: number
+          rgb_g?: number
+          rgb_r?: number
+          sort_order?: number
+          source_url?: string | null
+        }
+        Relationships: []
+      }
       campaign_config: {
         Row: {
           id: boolean

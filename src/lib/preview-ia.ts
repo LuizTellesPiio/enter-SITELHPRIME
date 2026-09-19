@@ -189,12 +189,19 @@ const asText = (value: unknown): string | null => (typeof value === "string" && 
 export const createGeneration = async (
   prompt: string,
   imageDataUrl: string,
+  colorId?: string | null,
 ): Promise<CreateGenerationResult> => {
-  const raw = await invokeFunction<Record<string, unknown>>("ai-preview-create", {
+  const body: Record<string, unknown> = {
     session_id: getSessionId(),
     prompt,
     image: imageDataUrl,
-  });
+  };
+
+  /* Fase 2 — preparado: o backend passará a receber o id da cor selecionada
+     e a consultar oficialmente no servidor. Hoje o campo é ignorado por ele. */
+  if (colorId) body.color_id = colorId;
+
+  const raw = await invokeFunction<Record<string, unknown>>("ai-preview-create", body);
 
   if (raw?.ok === true) {
     return {

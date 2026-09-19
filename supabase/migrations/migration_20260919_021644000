@@ -1,0 +1,29 @@
+create table if not exists public.ai_paint_colors (
+  id uuid primary key default gen_random_uuid(),
+  manufacturer text not null,
+  name text not null,
+  manufacturer_code text not null,
+  family text not null,
+  rgb_r integer not null check (rgb_r between 0 and 255),
+  rgb_g integer not null check (rgb_g between 0 and 255),
+  rgb_b integer not null check (rgb_b between 0 and 255),
+  hex text,
+  ncs text,
+  lrv numeric,
+  source_url text,
+  is_featured boolean not null default false,
+  is_active boolean not null default true,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now(),
+  constraint ai_paint_colors_manufacturer_code_unique unique (manufacturer, manufacturer_code)
+);
+
+create index if not exists ai_paint_colors_active_idx on public.ai_paint_colors (is_active);
+create index if not exists ai_paint_colors_manufacturer_idx on public.ai_paint_colors (manufacturer);
+
+-- Visitantes podem ler somente os registros ativos; nenhuma escrita por anon/usuário.
+alter table public.ai_paint_colors enable row level security;
+
+create policy ai_paint_colors_select_active on public.ai_paint_colors
+  for select
+  using (is_active = true);
