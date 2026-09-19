@@ -48,6 +48,7 @@ const KIE_MODEL = "flux-kontext-pro";
 
 const IMAGE_DATA_URL_RE = /^data:image\/(jpeg|png|webp);base64,/i;
 const SESSION_RE = /^[A-Za-z0-9_-]{8,64}$/;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const readJson = async (req: Request): Promise<Record<string, unknown>> => {
   try {
@@ -77,6 +78,43 @@ const buildPrompt = (userPrompt: string): string =>
     "Altere apenas as paredes, a pintura, as texturas e os acabamentos conforme o pedido.",
     "O resultado deve parecer uma fotografia real do mesmo ambiente, com acabamento profissional de pintura.",
   ].join(" ");
+
+/* ------------------------------------------------------------------ */
+/* Cor cadastrada na biblioteca (Fase 2)                               */
+/* ------------------------------------------------------------------ */
+
+/** Princípio técnico da edição cromática (photorealistic edit). */
+const COLOR_EDIT_PRINCIPLE =
+  "Edit the original photograph. Change only the requested paintable wall surfaces. Apply the selected manufacturer's registered color using the supplied RGB and HEX values as the target chromatic reference. Do not infer or reinterpret the color from its commercial name. Preserve the original architecture, geometry, perspective, wall texture, natural lighting, highlights and shadows so the selected color reacts realistically to the existing light. Do not change doors, door frames, windows, outlets, switches, floor, ceiling, furniture, objects or other materials. Do not introduce new colors, stains, textures, decorative effects or architectural elements.";
+
+/** Dados técnicos oficiais vindos exclusivamente do banco. */
+interface PaintColorRecord {
+  manufacturer: string;
+  name: string;
+  manufacturer_code: string;
+  rgb_r: number;
+  rgb_g: number;
+  rgb_b: number;
+  hex: string | null;
+  ncs: string | null;
+}
+
+/** Prompt final para geração baseada em cor cadastrada. */
+const buildColorEditPrompt = (color: PaintColorRecord, userText: string): string => {
+  const lines = [
+    "Photorealistic edit of the original photograph.",
+    COLOR_EDIT_PRINCIPLE,
+    "",
+    `Manufacturer: ${color.manufacturer}`,
+    `Color: ${color.name}`,
+    `Manufacturer code: ${color.manufacturer_code}`,
+    `RGB reference: ${color.rgb_r},${color.rgb_g},${color.rgb_b}`,
+    `HEX reference: ${color.hex ?? ""}`,
+  ];
+  if (color.ncs) lines.push(`NCS reference: ${color.ncs}`);
+  lines.push("", `User request: ${userText}`);
+  return lines.join("\n");
+};
 
 const kieRequest = async (
   url: string,
@@ -149,6 +187,39 @@ Deno.serve(async (req) => {
 
   const supabase = serviceClient();
 
+  /* Cor da biblioteca (Fase 2): valida o UUID e consulta os dados oficiais no
+     banco. Nunca confia em RGB/HEX/nome/código enviados pelo cliente. Se o id
+     for inválido, inexistente ou inativo, retorna erro controlado SEM chamar a
+     Kie.ai. */
+  const rawColorId = typeof body.color_id === "string" ? body.color_id.trim() : "";
+  let paintColor: PaintColorRecord | null = null;
+  if (rawColorId) {
+    if (!UUID_RE.test(rawColorId)) {
+      return json(
+        { error: "invalid_color", message: "A cor selecionada não é válida. Escolha outra cor." },
+        400,
+      );
+    }
+    const { data: colorRow, error: colorError } = await supabase
+      .from("ai_paint_colors")
+      .select("manufacturer, name, manufacturer_code, rgb_r, rgb_g, rgb_b, hex, ncs")
+      .eq("id", rawColorId)
+      .eq("is_active", true)
+      .maybeSingle();
+
+    if (colorError) {
+      console.error("ai-preview-create: falha ao consultar cor cadastrada", colorError.message);
+      return json({ error: "internal", message: "Não foi possível processar agora. Tente novamente." }, 500);
+    }
+    if (!colorRow) {
+      return json(
+        { error: "invalid_color", message: "A cor selecionada não está mais disponível. Escolha outra cor." },
+        400,
+      );
+    }
+    paintColor = colorRow as unknown as PaintColorRecord;
+  }
+
   /* Limite de gerações por sessão (contabiliza apenas as concluídas com sucesso). */
   const { count: usedCount, error: countError } = await supabase
     .from("ai_generations")
@@ -208,7 +279,7 @@ Deno.serve(async (req) => {
 
   /* 2. Cria a tarefa de edição (image editing) na Kie. */
   const generate = await kieRequest(KIE_GENERATE_URL, {
-    prompt: buildPrompt(prompt),
+    prompt: paintColor ? buildColorEditPrompt(paintColor, prompt) : buildPrompt(prompt),
     inputImage: downloadUrl,
     model: KIE_MODEL,
     outputFormat: "jpeg",

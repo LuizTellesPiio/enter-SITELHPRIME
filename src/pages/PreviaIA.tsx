@@ -236,8 +236,11 @@ const PreviaIA = () => {
     setPhase("generating");
     setErrorMessage("");
 
+    /* Com cor da biblioteca selecionada, o backend monta a instrução cromática
+       oficial; o prompt enviado é apenas o texto livre do usuário (onde aplicar).
+       Sem cor, mantém o fluxo atual (instrução do preset + texto). */
     const created = await createGeneration(
-      buildInternalPrompt(prompt.trim(), suggestionKey),
+      selectedColorId ? prompt.trim() : buildInternalPrompt(prompt.trim(), suggestionKey),
       imageDataUrl,
       selectedColorId,
     );
