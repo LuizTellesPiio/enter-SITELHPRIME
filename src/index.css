@@ -39,6 +39,10 @@
     --emerald-foreground: 0 0% 100%;
     --emerald-hover: 150 72% 32%;
 
+    /* Amber — avisos e alertas não bloqueantes */
+    --warning: 30 88% 34%;
+    --warning-foreground: 0 0% 100%;
+
     --radius: 0.75rem;
 
     --sidebar-background: 0 0% 98%;
@@ -75,6 +79,9 @@
 
     --destructive: 0 62% 45%;
     --destructive-foreground: 0 0% 100%;
+
+    --warning: 38 92% 62%;
+    --warning-foreground: 262 55% 10%;
 
     --border: 262 30% 22%;
     --input: 262 30% 24%;

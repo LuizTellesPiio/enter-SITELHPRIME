@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { SERVICE_PROFILES, type SurfaceRow } from "./pricing-materials";
 import {
   CAPACITY_FIELDS,
@@ -15,6 +16,15 @@ import {
   type NumericForm,
   type PricingForm,
 } from "./pricing-calc";
+import {
+  createDefaultDiagnosis,
+  createDefaultTeam,
+  normalizeSteps,
+  type DiagnosisState,
+  type StepState,
+  type TeamState,
+} from "./pricing-diagnosis";
+import type { ActualSnapshot, PlannedSnapshot } from "./pricing-quote";
 
 /* ------------------------------------------------------------------ */
 /* LH Prime — Diária & Precificação: persistência (RLS por dono).      */
@@ -77,11 +87,68 @@ const asSurfaces = (value: unknown): SurfaceRow[] => {
   });
 };
 
+/** Diagnóstico da obra (ambiente, superfície, imóvel, acesso e problemas). */
+const asDiagnosis = (value: unknown): DiagnosisState => {
+  const defaults = createDefaultDiagnosis();
+  if (!value || typeof value !== "object") return defaults;
+  const row = value as Record<string, unknown>;
+  const problems =
+    row.problems && typeof row.problems === "object"
+      ? (row.problems as Record<string, unknown>)
+      : {};
+
+  const readProblems = Object.fromEntries(
+    Object.entries(defaults.problems).map(([key, fallback]) => {
+      const raw = problems[key];
+      if (!raw || typeof raw !== "object") return [key, fallback];
+      const item = raw as Record<string, unknown>;
+      return [
+        key,
+        {
+          selected: item.selected === true,
+          impact:
+            item.impact === null || item.impact === undefined
+              ? fallback.impact
+              : String(item.impact),
+        },
+      ];
+    }),
+  );
+
+  return {
+    environment: String(row.environment ?? defaults.environment) || defaults.environment,
+    surfaceState: String(row.surfaceState ?? defaults.surfaceState) || defaults.surfaceState,
+    propertyCondition:
+      String(row.propertyCondition ?? defaults.propertyCondition) || defaults.propertyCondition,
+    access: String(row.access ?? defaults.access) || defaults.access,
+    problems: readProblems,
+  };
+};
+
+/** Equipe (profissionais, ajudantes e ganho por ajudante). */
+const asTeam = (value: unknown): TeamState => {
+  const defaults = createDefaultTeam();
+  if (!value || typeof value !== "object") return defaults;
+  const row = value as Record<string, unknown>;
+  const toText = (raw: unknown, fallback: string): string =>
+    raw === null || raw === undefined || raw === "" ? fallback : String(raw);
+  return {
+    professionals: toText(row.professionals, defaults.professionals),
+    helpers: toText(row.helpers, defaults.helpers),
+    helperGainPercent: toText(row.helperGainPercent, defaults.helperGainPercent),
+  };
+};
+
 export interface PricingSettingsBundle {
   form: PricingForm;
   surfaces: SurfaceRow[];
   serviceProfile: string;
   m2PerDay: string;
+  diagnosis: DiagnosisState;
+  steps: StepState[];
+  team: TeamState;
+  mobilizationMinimum: string;
+  maxDiscountPercent: string;
 }
 
 /** Carrega as configurações salvas do admin (null se ainda não existir). */
@@ -89,7 +156,7 @@ export const loadPricingSettings = async (userId: string): Promise<PricingSettin
   const { data, error } = await supabase
     .from("pricing_settings")
     .select(
-      "personal_costs, professional_costs, fixed_reserves, charges_percent, capacity, profit_margin, premium_extra, surfaces, service_profile, m2_per_day",
+      "personal_costs, professional_costs, fixed_reserves, charges_percent, capacity, profit_margin, premium_extra, surfaces, service_profile, m2_per_day, diagnosis, service_steps, team, mobilization_minimum, max_discount_percent",
     )
     .eq("user_id", userId)
     .maybeSingle();
@@ -98,6 +165,8 @@ export const loadPricingSettings = async (userId: string): Promise<PricingSettin
 
   const defaults = createDefaultForm();
   const capacity = asPlainMap(data.capacity);
+  const mobilization = asNumber(data.mobilization_minimum);
+  const maxDiscount = asNumber(data.max_discount_percent);
 
   return {
     form: {
@@ -121,20 +190,37 @@ export const loadPricingSettings = async (userId: string): Promise<PricingSettin
       data.m2_per_day !== null && data.m2_per_day !== undefined
         ? String(Math.max(0, Number(data.m2_per_day) || 0))
         : "",
+    diagnosis: asDiagnosis(data.diagnosis),
+    steps: normalizeSteps(data.service_steps),
+    team: asTeam(data.team),
+    mobilizationMinimum: mobilization ? formatCurrencyValue(mobilization) : "",
+    maxDiscountPercent: maxDiscount ? String(maxDiscount) : "",
   };
 };
+
+export interface PricingSettingsExtras {
+  surfaces: SurfaceRow[];
+  serviceProfile: string;
+  m2PerDay: string;
+  diagnosis: DiagnosisState;
+  steps: StepState[];
+  team: TeamState;
+  mobilizationMinimum: string;
+  maxDiscountPercent: string;
+}
 
 /** Salva (upsert) as configurações do admin autenticado. */
 export const savePricingSettings = async (
   userId: string,
   form: PricingForm,
-  extras: { surfaces: SurfaceRow[]; serviceProfile: string; m2PerDay: string },
+  extras: PricingSettingsExtras,
 ): Promise<{ ok: boolean; message?: string }> => {
   /* Nunca grava percentual fora de 0–100. */
   const invalidPercent =
     CHARGE_FIELDS.some((field) => !isPercentInputValid(form.charges[field.key])) ||
     !isPercentInputValid(form.margin) ||
-    !isPercentInputValid(form.premiumExtra);
+    !isPercentInputValid(form.premiumExtra) ||
+    !isPercentInputValid(extras.maxDiscountPercent);
 
   if (invalidPercent) {
     return { ok: false, message: "Revise os campos percentuais (aceito de 0% a 100%) antes de salvar." };
@@ -150,9 +236,14 @@ export const savePricingSettings = async (
       capacity: toPlainMap(form.capacity, CAPACITY_FIELDS),
       profit_margin: parseNumber(form.margin),
       premium_extra: parseNumber(form.premiumExtra),
-      surfaces: extras.surfaces,
+      surfaces: extras.surfaces as unknown as Json,
       service_profile: extras.serviceProfile,
       m2_per_day: parseNumber(extras.m2PerDay) || null,
+      diagnosis: extras.diagnosis as unknown as Json,
+      service_steps: extras.steps as unknown as Json,
+      team: extras.team as unknown as Json,
+      mobilization_minimum: parseCurrency(extras.mobilizationMinimum) || null,
+      max_discount_percent: parseNumber(extras.maxDiscountPercent) || null,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "user_id" },
@@ -162,47 +253,107 @@ export const savePricingSettings = async (
   return { ok: true };
 };
 
-/* ----------------------------- Histórico ---------------------------------- */
+/* ------------------------- Orçamentos salvos ------------------------------ */
 
-export interface SimulationRecord {
+export type QuoteStatus = "planejado" | "concluida";
+
+export interface QuoteRecord {
   id: string;
   reference: string;
   days: number;
   daily_rate: number;
   total: number;
   created_at: string;
+  status: QuoteStatus;
+  service_key: string | null;
+  area: number | null;
+  planned: PlannedSnapshot | null;
+  actual: ActualSnapshot | null;
+  closed_at: string | null;
 }
 
-export const listSimulations = async (userId: string): Promise<SimulationRecord[]> => {
+const asSnapshot = <T,>(value: unknown): T | null =>
+  value && typeof value === "object" ? (value as T) : null;
+
+export const listQuotes = async (userId: string): Promise<QuoteRecord[]> => {
   const { data, error } = await supabase
     .from("pricing_simulations")
-    .select("id, reference, days, daily_rate, total, created_at")
+    .select(
+      "id, reference, days, daily_rate, total, created_at, status, service_key, area, planned, actual, closed_at",
+    )
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(30);
 
   if (error) return [];
-  return (data ?? []) as unknown as SimulationRecord[];
+
+  return ((data ?? []) as unknown as Record<string, unknown>[]).map((row) => ({
+    id: String(row.id),
+    reference: String(row.reference ?? ""),
+    days: Number(row.days) || 0,
+    daily_rate: Number(row.daily_rate) || 0,
+    total: Number(row.total) || 0,
+    created_at: String(row.created_at ?? ""),
+    status: row.status === "concluida" ? "concluida" : "planejado",
+    service_key: row.service_key === null || row.service_key === undefined ? null : String(row.service_key),
+    area: row.area === null || row.area === undefined ? null : Number(row.area),
+    planned: asSnapshot<PlannedSnapshot>(row.planned),
+    actual: asSnapshot<ActualSnapshot>(row.actual),
+    closed_at: row.closed_at === null || row.closed_at === undefined ? null : String(row.closed_at),
+  }));
 };
 
-export const addSimulation = async (
+/** Salva um orçamento com o instantâneo completo do planejado. */
+export const saveQuote = async (
   userId: string,
-  input: { reference: string; days: number; dailyRate: number; total: number },
+  planned: PlannedSnapshot,
 ): Promise<{ ok: boolean; message?: string }> => {
   const { error } = await supabase.from("pricing_simulations").insert({
     user_id: userId,
-    reference: input.reference.trim().slice(0, 120),
-    days: Math.max(0, input.days),
-    daily_rate: Math.max(0, input.dailyRate),
-    total: Math.max(0, input.total),
+    reference: planned.reference.trim().slice(0, 120),
+    days: Math.max(0, planned.days),
+    daily_rate: Math.max(0, planned.dailyRate),
+    total: Math.max(0, planned.finalPrice),
+    status: "planejado",
+    service_key: planned.serviceKey,
+    area: Math.max(0, planned.area),
+    planned: planned as unknown as Json,
   });
 
-  if (error) return { ok: false, message: "Não foi possível salvar a simulação." };
+  if (error) return { ok: false, message: "Não foi possível salvar o orçamento." };
   return { ok: true };
 };
 
-export const deleteSimulation = async (id: string): Promise<{ ok: boolean; message?: string }> => {
+/** Fecha a obra gravando o realizado (planejado x realizado). */
+export const closeQuote = async (
+  id: string,
+  actual: ActualSnapshot,
+): Promise<{ ok: boolean; message?: string }> => {
+  const { data, error } = await supabase
+    .from("pricing_simulations")
+    .update({
+      actual: actual as unknown as Json,
+      status: "concluida",
+      closed_at: actual.closedAt,
+      days: Math.max(0, actual.days),
+      area: Math.max(0, actual.area),
+      total: Math.max(0, actual.finalPrice),
+    })
+    .eq("id", id)
+    .select("id");
+
+  if (error) return { ok: false, message: "Não foi possível concluir a obra." };
+  if (!data || data.length === 0) {
+    return {
+      ok: false,
+      message: "Não foi possível concluir a obra: orçamento não encontrado ou sem permissão.",
+    };
+  }
+  return { ok: true };
+};
+
+export const deleteQuote = async (id: string): Promise<{ ok: boolean; message?: string }> => {
   const { error } = await supabase.from("pricing_simulations").delete().eq("id", id);
-  if (error) return { ok: false, message: "Não foi possível excluir a simulação." };
+  if (error) return { ok: false, message: "Não foi possível excluir o orçamento." };
   return { ok: true };
 };

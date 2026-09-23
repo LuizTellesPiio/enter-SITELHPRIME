@@ -64,12 +64,6 @@ export const surfaceNetArea = (row: SurfaceRow): number => {
 export const totalNetArea = (rows: SurfaceRow[]): number =>
   rows.reduce((acc, row) => acc + surfaceNetArea(row), 0);
 
-/** Dias estimados = área líquida / produtividade (m² por dia), quando configurada. */
-export const estimateDays = (area: number, m2PerDay: number): number | null => {
-  if (area <= 0 || m2PerDay <= 0) return null;
-  return Math.max(1, Math.ceil(area / m2PerDay));
-};
-
 /* -------------------------- Configuração de material --------------------- */
 
 export interface MaterialConfig {

@@ -1,0 +1,6 @@
+-- Fechar obra é um UPDATE em pricing_simulations. A tabela já tem policies de
+-- SELECT/INSERT/DELETE, mas nenhuma de UPDATE (confirmado em pg_policies), então
+-- o fechamento não gravava. Mesmo escopo das demais: dono + admin.
+create policy pricing_simulations_owner_update on public.pricing_simulations
+  for update using (auth.uid() = user_id and is_admin())
+  with check (auth.uid() = user_id and is_admin());

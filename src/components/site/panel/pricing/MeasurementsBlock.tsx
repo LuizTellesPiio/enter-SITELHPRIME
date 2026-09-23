@@ -2,10 +2,8 @@ import { Plus, Ruler, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { parseNumber } from "@/lib/pricing-calc";
 import {
   createSurfaceRow,
-  estimateDays,
   surfaceNetArea,
   totalNetArea,
   type SurfaceRow,
@@ -13,7 +11,7 @@ import {
 import { BlockCard } from "./PricingUi";
 
 /* ------------------------------------------------------------------ */
-/* Medição por m² — superfícies, vãos e área líquida                   */
+/* 2. Medição por m² — superfícies, vãos e área líquida                 */
 /* ------------------------------------------------------------------ */
 
 const areaText = (value: number): string =>
@@ -21,17 +19,18 @@ const areaText = (value: number): string =>
 
 export const MeasurementsBlock = ({
   surfaces,
-  m2PerDay,
+  productivity,
+  days,
   onSurfacesChange,
-  onM2PerDayChange,
 }: {
   surfaces: SurfaceRow[];
-  m2PerDay: string;
+  /** produtividade da equipe já ajustada (m²/dia) */
+  productivity: number;
+  /** dias estimados a partir da área e da produtividade */
+  days: number | null;
   onSurfacesChange: (rows: SurfaceRow[]) => void;
-  onM2PerDayChange: (value: string) => void;
 }) => {
   const netArea = totalNetArea(surfaces);
-  const days = estimateDays(netArea, parseNumber(m2PerDay));
 
   const updateRow = (id: string, patch: Partial<SurfaceRow>) => {
     onSurfacesChange(surfaces.map((row) => (row.id === id ? { ...row, ...patch } : row)));
@@ -43,6 +42,7 @@ export const MeasurementsBlock = ({
 
   return (
     <BlockCard
+      step={2}
       title="Medição por m²"
       description="Informe largura, altura e vãos de cada superfície. A área líquida alimenta os materiais e o cálculo de dias."
     >
@@ -171,24 +171,13 @@ export const MeasurementsBlock = ({
           <p className="font-display text-lg font-bold text-primary">
             {days !== null ? `${days} dia(s)` : "Rendimento não configurado"}
           </p>
-        </div>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="m2-per-day" className="text-xs">
-            Produtividade de aplicação (m² por dia)
-          </Label>
-          <Input
-            id="m2-per-day"
-            inputMode="decimal"
-            value={m2PerDay}
-            onChange={(event) => onM2PerDayChange(event.target.value)}
-            placeholder="Ex.: 35"
-            className="h-10"
-          />
           <p className="text-[0.7rem] leading-snug text-muted-foreground">
-            Sem esse valor, informe os dias manualmente no simulador de obra.
+            {productivity > 0
+              ? `Usando ${productivity.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })} m²/dia (produtividade ajustada em “Produtividade e equipe”).`
+              : "Informe a produtividade base em “Produtividade e equipe”."}
           </p>
         </div>
       </div>

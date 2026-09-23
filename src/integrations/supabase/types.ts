@@ -3619,14 +3619,19 @@ export type Database = {
           capacity: Json
           charges: Json
           charges_percent: Json
+          diagnosis: Json
           fixed_reserves: Json
           m2_per_day: number | null
+          max_discount_percent: number | null
+          mobilization_minimum: number | null
           personal_costs: Json
           premium_extra: number
           professional_costs: Json
           profit_margin: number
           service_profile: string | null
+          service_steps: Json
           surfaces: Json
+          team: Json
           updated_at: string
           user_id: string
         }
@@ -3634,14 +3639,19 @@ export type Database = {
           capacity?: Json
           charges?: Json
           charges_percent?: Json
+          diagnosis?: Json
           fixed_reserves?: Json
           m2_per_day?: number | null
+          max_discount_percent?: number | null
+          mobilization_minimum?: number | null
           personal_costs?: Json
           premium_extra?: number
           professional_costs?: Json
           profit_margin?: number
           service_profile?: string | null
+          service_steps?: Json
           surfaces?: Json
+          team?: Json
           updated_at?: string
           user_id: string
         }
@@ -3649,14 +3659,19 @@ export type Database = {
           capacity?: Json
           charges?: Json
           charges_percent?: Json
+          diagnosis?: Json
           fixed_reserves?: Json
           m2_per_day?: number | null
+          max_discount_percent?: number | null
+          mobilization_minimum?: number | null
           personal_costs?: Json
           premium_extra?: number
           professional_costs?: Json
           profit_margin?: number
           service_profile?: string | null
+          service_steps?: Json
           surfaces?: Json
+          team?: Json
           updated_at?: string
           user_id?: string
         }
@@ -3664,29 +3679,47 @@ export type Database = {
       }
       pricing_simulations: {
         Row: {
+          actual: Json | null
+          area: number | null
+          closed_at: string | null
           created_at: string
           daily_rate: number
           days: number
           id: string
+          planned: Json | null
           reference: string
+          service_key: string | null
+          status: string
           total: number
           user_id: string
         }
         Insert: {
+          actual?: Json | null
+          area?: number | null
+          closed_at?: string | null
           created_at?: string
           daily_rate?: number
           days?: number
           id?: string
+          planned?: Json | null
           reference?: string
+          service_key?: string | null
+          status?: string
           total?: number
           user_id: string
         }
         Update: {
+          actual?: Json | null
+          area?: number | null
+          closed_at?: string | null
           created_at?: string
           daily_rate?: number
           days?: number
           id?: string
+          planned?: Json | null
           reference?: string
+          service_key?: string | null
+          status?: string
           total?: number
           user_id?: string
         }

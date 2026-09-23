@@ -250,10 +250,16 @@ export interface ObraInput {
   /** custo estimado dos materiais */
   materialsCost: number;
   dailyRates: { minimum: number; ideal: number; premium: number };
+  /** valor mínimo de mobilização em R$ (opcional) */
+  mobilizationMinimum?: number;
 }
 
 export interface ObraBreakdown {
   labor: number;
+  /** mão de obra antes de aplicar a mobilização mínima */
+  laborBeforeMinimum: number;
+  /** a mobilização mínima foi aplicada? */
+  mobilizationApplied: boolean;
   helpers: number;
   materials: number;
   extras: number;
@@ -270,6 +276,8 @@ export interface ObraResult {
 /**
  * Para cada base de diária (mínima/ideal/premium):
  *   mão_de_obra = dias × diária
+ *   mobilização = se a mão de obra ficar abaixo do mínimo, usa o mínimo
+ *                 (os materiais continuam sendo somados normalmente)
  *   subtotal    = mão_de_obra + ajudantes + materiais + custos_extras
  *   total       = subtotal + imprevistos%
  */
@@ -279,13 +287,18 @@ export const calculateObra = (input: ObraInput): ObraResult => {
   const materials = Math.max(0, input.materialsCost);
   const extras = Math.max(0, input.travel) + Math.max(0, input.otherCosts);
   const contingencyPercent = clampPercent(input.contingency);
+  const mobilizationMinimum = Math.max(0, input.mobilizationMinimum ?? 0);
 
   const build = (daily: number): ObraBreakdown => {
-    const labor = days * Math.max(0, daily);
+    const laborBeforeMinimum = days * Math.max(0, daily);
+    const mobilizationApplied = mobilizationMinimum > 0 && laborBeforeMinimum < mobilizationMinimum;
+    const labor = mobilizationApplied ? mobilizationMinimum : laborBeforeMinimum;
     const subtotal = labor + helpers + materials + extras;
     const contingency = subtotal * (contingencyPercent / 100);
     return {
       labor,
+      laborBeforeMinimum,
+      mobilizationApplied,
       helpers,
       materials,
       extras,

@@ -5,7 +5,6 @@ import { Label } from "@/components/ui/label";
 import { formatBRL, formatCurrencyOnBlur, normalizeCurrencyInput } from "@/lib/pricing-calc";
 import {
   PACKAGE_PRESETS,
-  SERVICE_PROFILES,
   type MaterialConfig,
   type MaterialEstimate,
   type ServiceMaterialRow,
@@ -14,32 +13,30 @@ import { cn } from "@/lib/utils";
 import { BlockCard, FieldInput } from "./PricingUi";
 
 /* ------------------------------------------------------------------ */
-/* Estimativa configurável de materiais                                */
+/* 5. Materiais previstos — estimativa configurável                    */
 /* ------------------------------------------------------------------ */
 
 const qty = (value: number, unit: string): string =>
   `${value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} ${unit}`;
 
 export const MaterialsBlock = ({
-  serviceKey,
+  serviceLabel,
   rows,
   estimates,
   area,
   totalCost,
   saving,
   feedback,
-  onServiceChange,
   onRowsChange,
   onSave,
 }: {
-  serviceKey: string;
+  serviceLabel: string;
   rows: ServiceMaterialRow[];
   estimates: MaterialEstimate[];
   area: number;
   totalCost: number;
   saving: boolean;
   feedback: { type: "success" | "error"; text: string } | null;
-  onServiceChange: (key: string) => void;
   onRowsChange: (rows: ServiceMaterialRow[]) => void;
   onSave: () => void;
 }) => {
@@ -53,28 +50,16 @@ export const MaterialsBlock = ({
 
   return (
     <BlockCard
-      title="Estimativa de materiais"
-      description="Escolha o serviço e configure rendimento, demãos, desperdício e embalagem. Tudo editável."
+      step={5}
+      title="Materiais previstos"
+      description="Configure rendimento, demãos, desperdício e embalagem de cada material. Tudo editável — o que você não configurar aparece como não configurado."
     >
-      {/* Serviço */}
-      <div className="flex flex-wrap gap-2">
-        {SERVICE_PROFILES.map((profile) => (
-          <button
-            key={profile.key}
-            type="button"
-            onClick={() => onServiceChange(profile.key)}
-            aria-pressed={serviceKey === profile.key}
-            className={cn(
-              "rounded-full border px-4 py-2 text-xs font-bold transition-colors",
-              serviceKey === profile.key
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-border bg-muted/40 text-muted-foreground hover:border-primary/30 hover:text-primary",
-            )}
-          >
-            {profile.label}
-          </button>
-        ))}
-      </div>
+      {/* Serviço escolhido no bloco de etapas */}
+      <p className="rounded-2xl border border-border/70 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+        Materiais do serviço{" "}
+        <strong className="font-bold text-primary">{serviceLabel}</strong>. Para trocar, use “Serviço
+        e etapas do serviço”.
+      </p>
 
       {/* Área usada */}
       <p className="rounded-2xl border border-primary/20 bg-secondary/50 px-4 py-3 text-sm text-primary">

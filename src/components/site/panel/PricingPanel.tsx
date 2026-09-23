@@ -1,17 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  AlertCircle,
-  Calculator,
-  Loader2,
-  Plus,
-  RotateCcw,
-  Save,
-  Trash2,
-  TrendingUp,
-} from "lucide-react";
+import { AlertCircle, Calculator, Loader2, RotateCcw, Save, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import {
   CAPACITY_FIELDS,
@@ -19,7 +9,6 @@ import {
   FIXED_RESERVE_FIELDS,
   PERSONAL_FIELDS,
   PROFESSIONAL_FIELDS,
-  calculateObra,
   calculatePricing,
   createDefaultForm,
   formatBRL,
@@ -30,17 +19,37 @@ import {
   type PricingForm,
 } from "@/lib/pricing-calc";
 import {
-  addSimulation,
-  deleteSimulation,
-  listSimulations,
-  loadPricingSettings,
-  savePricingSettings,
-  type SimulationRecord,
-} from "@/lib/pricing-api";
+  ACCESS_OPTIONS,
+  ENVIRONMENT_OPTIONS,
+  PROBLEM_OPTIONS,
+  PROPERTY_CONDITION_OPTIONS,
+  SURFACE_STATE_OPTIONS,
+  computeProductivity,
+  createDefaultDiagnosis,
+  createDefaultSteps,
+  createDefaultTeam,
+  enabledSteps,
+  isImpactInputValid,
+  optionLabel,
+  selectedProblems,
+  stepDef,
+  type DiagnosisState,
+  type StepState,
+  type TeamState,
+} from "@/lib/pricing-diagnosis";
+import {
+  averageByService,
+  buildPlannedMaterials,
+  calculateCommercial,
+  BASE_OPTIONS,
+  type ActualSnapshot,
+  type BaseKey,
+  type PlannedSnapshot,
+  type QuoteFieldsState,
+} from "@/lib/pricing-quote";
 import {
   SERVICE_PROFILES,
   emptyMaterialConfig,
-  estimateDays,
   estimateMaterial,
   totalMaterialsCost,
   totalNetArea,
@@ -53,9 +62,25 @@ import {
   loadServiceMaterials,
   saveServiceMaterials,
 } from "@/lib/pricing-materials-api";
-import { BlockCard, FieldGrid, FieldInput, ResultCard } from "./pricing/PricingUi";
+import {
+  closeQuote,
+  deleteQuote,
+  listQuotes,
+  loadPricingSettings,
+  savePricingSettings,
+  saveQuote,
+  type QuoteRecord,
+} from "@/lib/pricing-api";
+import { BlockCard, FieldGrid, ResultCard } from "./pricing/PricingUi";
+import { DiagnosisBlock } from "./pricing/DiagnosisBlock";
 import { MeasurementsBlock } from "./pricing/MeasurementsBlock";
+import { StepsBlock } from "./pricing/StepsBlock";
+import { TeamBlock } from "./pricing/TeamBlock";
 import { MaterialsBlock } from "./pricing/MaterialsBlock";
+import { QuoteBlock } from "./pricing/QuoteBlock";
+import { SaveQuoteBlock } from "./pricing/SaveQuoteBlock";
+import { QuoteHistoryBlock } from "./pricing/QuoteHistoryBlock";
+import { ServiceAveragesBlock } from "./pricing/ServiceAveragesBlock";
 import { cn } from "@/lib/utils";
 
 /* ------------------------------------------------------------------ */
@@ -65,22 +90,20 @@ import { cn } from "@/lib/utils";
 const MARGIN_PRESETS = [20, 30, 40, 50];
 const PREMIUM_PRESETS = [15, 20, 30];
 
-const BASE_OPTIONS = [
-  { key: "minima", label: "Diária mínima", obraKey: "minimum" },
-  { key: "ideal", label: "Diária ideal", obraKey: "ideal" },
-  { key: "premium", label: "Diária premium", obraKey: "premium" },
-] as const;
+const SectionHeading = ({ title, description }: { title: string; description: string }) => (
+  <div className="flex flex-col gap-1 border-t border-border/70 pt-6">
+    <h2 className="font-display text-lg font-extrabold tracking-tight text-primary">{title}</h2>
+    <p className="text-sm text-muted-foreground">{description}</p>
+  </div>
+);
 
-type BaseKey = (typeof BASE_OPTIONS)[number]["key"];
-
-const SIMULATOR_FIELDS: { key: string; label: string; kind: "plain" | "currency" | "percent" }[] = [
-  { key: "days", label: "Número estimado de dias", kind: "plain" },
-  { key: "helpers", label: "Quantidade de ajudantes", kind: "plain" },
-  { key: "helperRate", label: "Diária de cada ajudante", kind: "currency" },
-  { key: "travel", label: "Deslocamento total", kind: "currency" },
-  { key: "otherCosts", label: "Outros custos diretos", kind: "currency" },
-  { key: "contingency", label: "Percentual de imprevistos", kind: "percent" },
-];
+const createDefaultQuoteFields = (): QuoteFieldsState => ({
+  days: "5",
+  helperRate: formatCurrencyValue(150),
+  travel: formatCurrencyValue(100),
+  otherCosts: "",
+  contingency: "10",
+});
 
 export const PricingPanel = () => {
   const [userId, setUserId] = useState<string | null>(null);
@@ -88,6 +111,11 @@ export const PricingPanel = () => {
   const [surfaces, setSurfaces] = useState<SurfaceRow[]>([]);
   const [serviceProfile, setServiceProfile] = useState<string>(SERVICE_PROFILES[0].key);
   const [m2PerDay, setM2PerDay] = useState("");
+  const [diagnosis, setDiagnosis] = useState<DiagnosisState>(createDefaultDiagnosis);
+  const [steps, setSteps] = useState<StepState[]>(createDefaultSteps);
+  const [team, setTeam] = useState<TeamState>(createDefaultTeam);
+  const [mobilization, setMobilization] = useState("");
+  const [maxDiscount, setMaxDiscount] = useState("");
   const [catalog, setCatalog] = useState<MaterialRecord[]>([]);
   const [serviceRows, setServiceRows] = useState<ServiceMaterialRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -99,19 +127,16 @@ export const PricingPanel = () => {
     text: string;
   } | null>(null);
 
-  const [sim, setSim] = useState({
-    days: "5",
-    helpers: "1",
-    helperRate: formatCurrencyValue(150),
-    travel: formatCurrencyValue(100),
-    otherCosts: "",
-    contingency: "10",
-  });
+  const [quoteFields, setQuoteFields] = useState<QuoteFieldsState>(createDefaultQuoteFields);
   const [base, setBase] = useState<BaseKey>("ideal");
+  const [desiredPrice, setDesiredPrice] = useState("");
   const [reference, setReference] = useState("");
-  const [history, setHistory] = useState<SimulationRecord[]>([]);
-  const [savingSim, setSavingSim] = useState(false);
-  const [simFeedback, setSimFeedback] = useState<string | null>(null);
+  const [quotes, setQuotes] = useState<QuoteRecord[]>([]);
+  const [savingQuote, setSavingQuote] = useState(false);
+  const [quoteFeedback, setQuoteFeedback] = useState<string | null>(null);
+  const [closeFeedback, setCloseFeedback] = useState<string | null>(null);
+  const [closingId, setClosingId] = useState<string | null>(null);
+  const [savingClose, setSavingClose] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -123,9 +148,9 @@ export const PricingPanel = () => {
       setUserId(id);
 
       if (id) {
-        const [bundle, sims, materials] = await Promise.all([
+        const [bundle, savedQuotes, materials] = await Promise.all([
           loadPricingSettings(id),
-          listSimulations(id),
+          listQuotes(id),
           loadMaterialCatalog(),
         ]);
         if (!active) return;
@@ -134,9 +159,14 @@ export const PricingPanel = () => {
           setSurfaces(bundle.surfaces);
           setServiceProfile(bundle.serviceProfile);
           setM2PerDay(bundle.m2PerDay);
+          setDiagnosis(bundle.diagnosis);
+          setSteps(bundle.steps);
+          setTeam(bundle.team);
+          setMobilization(bundle.mobilizationMinimum);
+          setMaxDiscount(bundle.maxDiscountPercent);
         }
         setCatalog(materials);
-        setHistory(sims);
+        setQuotes(savedQuotes);
       }
       setLoading(false);
     })();
@@ -174,13 +204,63 @@ export const PricingPanel = () => {
   const result = useMemo(() => calculatePricing(form), [form]);
 
   const netArea = useMemo(() => totalNetArea(surfaces), [surfaces]);
-  const estimatedDays = estimateDays(netArea, parseNumber(m2PerDay));
+
+  const productivity = useMemo(
+    () =>
+      computeProductivity({
+        base: parseNumber(m2PerDay),
+        area: netArea,
+        diagnosis,
+        steps,
+        team,
+      }),
+    [m2PerDay, netArea, diagnosis, steps, team],
+  );
 
   const estimates = useMemo(
     () => serviceRows.map((row) => estimateMaterial(row.config, row.material, netArea)),
     [serviceRows, netArea],
   );
   const materialsCost = useMemo(() => totalMaterialsCost(estimates), [estimates]);
+
+  const serviceLabel =
+    SERVICE_PROFILES.find((profile) => profile.key === serviceProfile)?.label ?? "";
+
+  const commercial = useMemo(
+    () =>
+      calculateCommercial({
+        days: parseNumber(quoteFields.days),
+        helpers: Math.max(0, Math.floor(parseNumber(team.helpers))),
+        helperRate: parseCurrency(quoteFields.helperRate),
+        travel: parseCurrency(quoteFields.travel),
+        otherCosts: parseCurrency(quoteFields.otherCosts),
+        contingency: parseNumber(quoteFields.contingency),
+        materialsCost,
+        costPerDay: result.costPerDay,
+        dailyRates: {
+          minimum: result.minimumDaily,
+          ideal: result.idealDaily,
+          premium: result.premiumDaily,
+        },
+        mobilizationMinimum: parseCurrency(mobilization),
+        minimumMarginPercent: parseNumber(form.margin),
+        maxDiscountPercent: parseNumber(maxDiscount),
+        desiredPrice: parseCurrency(desiredPrice),
+      }),
+    [
+      quoteFields,
+      team.helpers,
+      materialsCost,
+      result.costPerDay,
+      result.minimumDaily,
+      result.idealDaily,
+      result.premiumDaily,
+      mobilization,
+      form.margin,
+      maxDiscount,
+      desiredPrice,
+    ],
+  );
 
   const invalidPercents = useMemo(() => {
     const list: string[] = [];
@@ -189,36 +269,39 @@ export const PricingPanel = () => {
     });
     if (!isPercentInputValid(form.margin)) list.push("Margem de lucro");
     if (!isPercentInputValid(form.premiumExtra)) list.push("Adicional premium");
-    if (!isPercentInputValid(sim.contingency)) list.push("Imprevistos da obra");
+    if (!isPercentInputValid(quoteFields.contingency)) list.push("Imprevistos da obra");
+    if (!isPercentInputValid(maxDiscount)) list.push("Desconto máximo permitido");
     serviceRows.forEach((row) => {
       if (!isPercentInputValid(row.config.wastePercent)) {
         list.push(`Desperdício de ${row.material.name}`);
       }
     });
     return list;
-  }, [form, sim.contingency, serviceRows]);
+  }, [form, quoteFields.contingency, maxDiscount, serviceRows]);
 
-  const obra = useMemo(
-    () =>
-      calculateObra({
-        days: parseNumber(sim.days),
-        helpers: parseNumber(sim.helpers),
-        helperRate: parseCurrency(sim.helperRate),
-        travel: parseCurrency(sim.travel),
-        otherCosts: parseCurrency(sim.otherCosts),
-        contingency: parseNumber(sim.contingency),
-        materialsCost,
-        dailyRates: {
-          minimum: result.minimumDaily,
-          ideal: result.idealDaily,
-          premium: result.premiumDaily,
-        },
-      }),
-    [sim, materialsCost, result.minimumDaily, result.idealDaily, result.premiumDaily],
+  const invalidImpacts = useMemo(
+    () => PROBLEM_OPTIONS.filter((option) => !isImpactInputValid(diagnosis.problems[option.key]?.impact))
+      .length + steps.filter((step) => !isImpactInputValid(step.impact)).length,
+    [diagnosis, steps],
   );
 
-  const selectedBase = BASE_OPTIONS.find((option) => option.key === base) ?? BASE_OPTIONS[1];
-  const breakdown = obra[selectedBase.obraKey];
+  const averages = useMemo(
+    () =>
+      averageByService(
+        quotes
+          .filter((quote) => quote.status === "concluida" && quote.planned && quote.actual)
+          .map((quote) => ({
+            serviceKey: quote.service_key ?? "",
+            serviceLabel:
+              quote.planned?.serviceLabel ||
+              SERVICE_PROFILES.find((profile) => profile.key === quote.service_key)?.label ||
+              "",
+            planned: quote.planned,
+            actual: quote.actual,
+          })),
+      ),
+    [quotes],
+  );
 
   const updateBlock = useCallback(
     (
@@ -236,7 +319,16 @@ export const PricingPanel = () => {
     if (!userId || saving || invalidPercents.length > 0) return;
     setSaving(true);
     setFeedback(null);
-    const saved = await savePricingSettings(userId, form, { surfaces, serviceProfile, m2PerDay });
+    const saved = await savePricingSettings(userId, form, {
+      surfaces,
+      serviceProfile,
+      m2PerDay,
+      diagnosis,
+      steps,
+      team,
+      mobilizationMinimum: mobilization,
+      maxDiscountPercent: maxDiscount,
+    });
     setSaving(false);
     setFeedback(
       saved.ok
@@ -260,53 +352,132 @@ export const PricingPanel = () => {
 
   const handleReset = () => {
     const confirmed = window.confirm(
-      "Restaurar os valores padrão? Os campos preenchidos (incluindo medições) serão substituídos pelos valores sugeridos. O histórico de simulações é mantido.",
+      "Restaurar os valores padrão? Os campos preenchidos (incluindo medições, diagnóstico e etapas) serão substituídos pelos valores sugeridos. O histórico de orçamentos é mantido.",
     );
     if (!confirmed) return;
     setForm(createDefaultForm());
     setSurfaces([]);
     setM2PerDay("");
     setServiceProfile(SERVICE_PROFILES[0].key);
+    setDiagnosis(createDefaultDiagnosis());
+    setSteps(createDefaultSteps());
+    setTeam(createDefaultTeam());
+    setMobilization("");
+    setMaxDiscount("");
+    setDesiredPrice("");
+    setQuoteFields(createDefaultQuoteFields());
     setFeedback({
       type: "success",
       text: "Valores padrão restaurados. Clique em “Salvar configurações” para gravar.",
     });
   };
 
-  const handleSaveSimulation = async () => {
-    if (!userId || savingSim) return;
-    setSavingSim(true);
-    setSimFeedback(null);
-    const saved = await addSimulation(userId, {
-      reference,
-      days: parseNumber(sim.days),
-      dailyRate:
-        selectedBase.key === "minima"
-          ? result.minimumDaily
-          : selectedBase.key === "premium"
-            ? result.premiumDaily
-            : result.idealDaily,
-      total: breakdown.total,
-    });
-    setSavingSim(false);
+  const buildPlanned = (): PlannedSnapshot => ({
+    reference: reference.trim(),
+    area: netArea,
+    serviceKey: serviceProfile,
+    serviceLabel,
+    environmentLabel: optionLabel(ENVIRONMENT_OPTIONS, diagnosis.environment),
+    surfaceStateLabel: optionLabel(SURFACE_STATE_OPTIONS, diagnosis.surfaceState),
+    propertyConditionLabel: optionLabel(PROPERTY_CONDITION_OPTIONS, diagnosis.propertyCondition),
+    accessLabel: optionLabel(ACCESS_OPTIONS, diagnosis.access),
+    problems: selectedProblems(diagnosis).map((option) => option.label),
+    steps: enabledSteps(steps).map((step) => ({
+      key: step.key,
+      label: stepDef(step.key)?.label ?? step.key,
+      impact: parseNumber(step.impact),
+      materialId: step.materialId,
+    })),
+    days: parseNumber(quoteFields.days),
+    productivityBase: productivity.base,
+    productivityAdjusted: productivity.adjusted,
+    productivityTeam: productivity.team,
+    factors: {
+      surface: productivity.surfaceFactor,
+      property: productivity.propertyFactor,
+      access: productivity.accessFactor,
+      problems: productivity.problemsFactor,
+      steps: productivity.stepsFactor,
+      team: productivity.teamFactor,
+    },
+    team: {
+      professionals: Math.max(1, Math.floor(parseNumber(team.professionals) || 1)),
+      helpers: Math.max(0, Math.floor(parseNumber(team.helpers))),
+      helperGainPercent: parseNumber(team.helperGainPercent),
+    },
+    materialsCost,
+    materials: buildPlannedMaterials(
+      serviceRows.flatMap((row, index) => {
+        const estimate = estimates[index];
+        return estimate ? [{ material: row.material, estimate }] : [];
+      }),
+    ),
+    costPerDay: result.costPerDay,
+    helperRate: parseCurrency(quoteFields.helperRate),
+    extras: parseCurrency(quoteFields.travel) + parseCurrency(quoteFields.otherCosts),
+    cost: commercial.cost,
+    totals: {
+      minimum: commercial.minimum.total,
+      ideal: commercial.ideal.total,
+      premium: commercial.premium.total,
+    },
+    mobilizationMinimum: parseCurrency(mobilization),
+    mobilizationApplied: commercial.ideal.mobilizationApplied,
+    dailyRate:
+      base === "minima"
+        ? result.minimumDaily
+        : base === "premium"
+          ? result.premiumDaily
+          : result.idealDaily,
+    baseKey: base,
+    contingencyPercent: parseNumber(quoteFields.contingency),
+    desiredPrice: parseCurrency(desiredPrice),
+    finalPrice: commercial.finalPrice,
+    discountPercent: commercial.discountPercent,
+    marginPercent: commercial.finalMarginPercent,
+    createdAt: new Date().toISOString(),
+  });
+
+  const handleSaveQuote = async () => {
+    if (!userId || savingQuote) return;
+    setSavingQuote(true);
+    setQuoteFeedback(null);
+    const saved = await saveQuote(userId, buildPlanned());
+    setSavingQuote(false);
 
     if (!saved.ok) {
-      setSimFeedback(saved.message ?? "Não foi possível salvar a simulação.");
+      setQuoteFeedback(saved.message ?? "Não foi possível salvar o orçamento.");
       return;
     }
 
     setReference("");
-    setHistory(await listSimulations(userId));
+    setQuotes(await listQuotes(userId));
   };
 
-  const handleDeleteSimulation = async (id: string) => {
-    if (!userId) return;
-    const removed = await deleteSimulation(id);
-    if (!removed.ok) {
-      setSimFeedback(removed.message ?? "Não foi possível excluir.");
+  const handleCloseQuote = async (quote: QuoteRecord, actual: ActualSnapshot) => {
+    if (savingClose) return;
+    setSavingClose(true);
+    setCloseFeedback(null);
+    const closed = await closeQuote(quote.id, actual);
+    setSavingClose(false);
+
+    if (!closed.ok) {
+      setCloseFeedback(closed.message ?? "Não foi possível concluir a obra.");
       return;
     }
-    setHistory((prev) => prev.filter((item) => item.id !== id));
+
+    setClosingId(null);
+    if (userId) setQuotes(await listQuotes(userId));
+  };
+
+  const handleDeleteQuote = async (id: string) => {
+    if (!userId) return;
+    const removed = await deleteQuote(id);
+    if (!removed.ok) {
+      setCloseFeedback(removed.message ?? "Não foi possível excluir.");
+      return;
+    }
+    setQuotes((prev) => prev.filter((item) => item.id !== id));
   };
 
   if (loading) {
@@ -380,6 +551,11 @@ export const PricingPanel = () => {
           <p className="font-display text-lg font-bold text-primary">{result.productiveDays}</p>
         </div>
       </div>
+
+      <SectionHeading
+        title="Configurações da diária"
+        description="Seus custos, reservas, encargos, capacidade e margem. É a base de todos os orçamentos."
+      />
 
       {/* Custos pessoais */}
       <BlockCard
@@ -471,7 +647,7 @@ export const PricingPanel = () => {
       {/* Margem */}
       <BlockCard
         title="Margem de lucro desejada"
-        description="Sugestões rápidas ou valor personalizado (0% a 100%)."
+        description="Sugestões rápidas ou valor personalizado (0% a 100%). É também a sua margem mínima nos orçamentos."
       >
         <div className="flex flex-wrap items-center gap-2">
           {MARGIN_PRESETS.map((preset) => (
@@ -555,28 +731,6 @@ export const PricingPanel = () => {
         </div>
       </BlockCard>
 
-      {/* Medição por m² */}
-      <MeasurementsBlock
-        surfaces={surfaces}
-        m2PerDay={m2PerDay}
-        onSurfacesChange={setSurfaces}
-        onM2PerDayChange={setM2PerDay}
-      />
-
-      {/* Materiais */}
-      <MaterialsBlock
-        serviceKey={serviceProfile}
-        rows={serviceRows}
-        estimates={estimates}
-        area={netArea}
-        totalCost={materialsCost}
-        saving={materialSaving}
-        feedback={materialFeedback}
-        onServiceChange={setServiceProfile}
-        onRowsChange={setServiceRows}
-        onSave={() => void handleSaveMaterials()}
-      />
-
       {/* Aviso de percentual inválido */}
       {invalidPercents.length > 0 ? (
         <p className="flex items-start gap-2 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -622,199 +776,126 @@ export const PricingPanel = () => {
         </Button>
       </div>
 
-      {/* Simulador de obra */}
-      <BlockCard
-        title="Simular mão de obra de uma obra"
-        description="Escolha a base de diária e veja o preço sugerido, já com os materiais estimados."
-      >
-        <div className="flex flex-wrap gap-2">
-          {BASE_OPTIONS.map((option) => (
-            <button
-              key={option.key}
-              type="button"
-              onClick={() => setBase(option.key)}
-              aria-pressed={base === option.key}
-              className={cn(
-                "rounded-full border px-4 py-2 text-xs font-bold transition-colors",
-                base === option.key
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border bg-muted/40 text-muted-foreground hover:border-primary/30 hover:text-primary",
-              )}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
+      <SectionHeading
+        title="Montagem do orçamento"
+        description="Siga a ordem: diagnóstico, medição, etapas, produtividade, materiais, preço e por último salve o orçamento."
+      />
 
-        <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-muted-foreground">
-          <span>
-            Diária base usada:{" "}
-            {formatBRL(
-              selectedBase.key === "minima"
-                ? result.minimumDaily
-                : selectedBase.key === "premium"
-                  ? result.premiumDaily
-                  : result.idealDaily,
-            )}
-          </span>
-          {estimatedDays !== null ? (
-            <button
-              type="button"
-              onClick={() => setSim((prev) => ({ ...prev, days: String(estimatedDays) }))}
-              className="rounded-full border border-emerald/40 bg-emerald/10 px-3 py-1 font-bold text-emerald transition-colors hover:bg-emerald/20"
-            >
-              Usar {estimatedDays} dia(s) estimado(s) pelo m²
-            </button>
-          ) : null}
-        </div>
+      <DiagnosisBlock
+        diagnosis={diagnosis}
+        breakdown={productivity}
+        onChange={(next) => {
+          setDiagnosis(next);
+          setFeedback(null);
+        }}
+      />
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {SIMULATOR_FIELDS.map((field) => (
-            <FieldInput
-              key={field.key}
-              id={`sim-${field.key}`}
-              label={field.label}
-              kind={field.kind}
-              value={sim[field.key as keyof typeof sim]}
-              invalid={field.kind === "percent" && !isPercentInputValid(sim.contingency)}
-              onChange={(value) => setSim((prev) => ({ ...prev, [field.key]: value }))}
-            />
-          ))}
-        </div>
+      <MeasurementsBlock
+        surfaces={surfaces}
+        productivity={productivity.team}
+        days={productivity.days}
+        onSurfacesChange={setSurfaces}
+      />
 
-        <div className="flex flex-col gap-2 rounded-2xl border border-border/70 bg-muted/30 p-4 text-sm">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-muted-foreground">Minha mão de obra</span>
-            <span className="font-semibold text-primary">{formatBRL(breakdown.labor)}</span>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-muted-foreground">Custo dos ajudantes</span>
-            <span className="font-semibold text-primary">{formatBRL(breakdown.helpers)}</span>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-muted-foreground">Materiais estimados</span>
-            <span className="font-semibold text-primary">{formatBRL(breakdown.materials)}</span>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-muted-foreground">Custos extras</span>
-            <span className="font-semibold text-primary">{formatBRL(breakdown.extras)}</span>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-muted-foreground">
-              Reserva/imprevistos ({parseNumber(sim.contingency)}%)
-            </span>
-            <span className="font-semibold text-primary">{formatBRL(breakdown.contingency)}</span>
-          </div>
-          <div className="mt-1 flex items-center justify-between gap-3 border-t border-border/70 pt-3">
-            <span className="font-bold text-primary">Preço sugerido ({selectedBase.label})</span>
-            <span className="font-display text-lg font-extrabold text-emerald">
-              {formatBRL(breakdown.total)}
-            </span>
-          </div>
-        </div>
+      <StepsBlock
+        serviceKey={serviceProfile}
+        onServiceChange={setServiceProfile}
+        steps={steps}
+        diagnosis={diagnosis}
+        breakdown={productivity}
+        catalog={catalog}
+        onStepsChange={(next) => {
+          setSteps(next);
+          setFeedback(null);
+        }}
+      />
 
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-2xl border border-border/70 bg-muted/30 p-4">
-            <span className="text-[0.68rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-              Total mínimo
-            </span>
-            <p className="font-display text-lg font-bold text-primary">{formatBRL(obra.minimum.total)}</p>
-          </div>
-          <div className="rounded-2xl border border-emerald/40 bg-emerald/10 p-4">
-            <span className="text-[0.68rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-              Total ideal
-            </span>
-            <p className="font-display text-lg font-bold text-emerald">{formatBRL(obra.ideal.total)}</p>
-          </div>
-          <div className="rounded-2xl border border-border/70 bg-muted/30 p-4">
-            <span className="text-[0.68rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-              Total premium
-            </span>
-            <p className="font-display text-lg font-bold text-primary">{formatBRL(obra.premium.total)}</p>
-          </div>
-        </div>
+      <TeamBlock
+        m2PerDay={m2PerDay}
+        onM2PerDayChange={setM2PerDay}
+        team={team}
+        onTeamChange={(next) => {
+          setTeam(next);
+          setFeedback(null);
+        }}
+        breakdown={productivity}
+        days={productivity.days}
+      />
 
-        <p className="rounded-2xl border border-border/70 bg-secondary/40 px-4 py-3 text-xs leading-relaxed text-muted-foreground">
-          O valor sugerido refere-se à mão de obra e aos custos configurados nesta ferramenta. Tintas,
-          massas, seladores e outros materiais principais da obra devem ser considerados separadamente
-          quando aplicável.
+      <MaterialsBlock
+        serviceLabel={serviceLabel}
+        rows={serviceRows}
+        estimates={estimates}
+        area={netArea}
+        totalCost={materialsCost}
+        saving={materialSaving}
+        feedback={materialFeedback}
+        onRowsChange={setServiceRows}
+        onSave={() => void handleSaveMaterials()}
+      />
+
+      <QuoteBlock
+        fields={quoteFields}
+        onFieldsChange={(patch) => setQuoteFields((prev) => ({ ...prev, ...patch }))}
+        base={base}
+        onBaseChange={setBase}
+        commercial={commercial}
+        productivity={productivity}
+        team={team}
+        costPerDay={result.costPerDay}
+        materialsCost={materialsCost}
+        mobilizationMinimum={mobilization}
+        onMobilizationChange={setMobilization}
+        maxDiscount={maxDiscount}
+        onMaxDiscountChange={setMaxDiscount}
+        desiredPrice={desiredPrice}
+        onDesiredPriceChange={setDesiredPrice}
+        invalidContingency={!isPercentInputValid(quoteFields.contingency)}
+        invalidMaxDiscount={!isPercentInputValid(maxDiscount)}
+      />
+
+      <SaveQuoteBlock
+        reference={reference}
+        onReferenceChange={setReference}
+        summary={{
+          serviceLabel,
+          area: netArea,
+          days: parseNumber(quoteFields.days),
+          productivity: productivity.team,
+          materialsCost,
+          finalPrice: commercial.finalPrice,
+          steps: enabledSteps(steps).length,
+          problems: selectedProblems(diagnosis).length,
+        }}
+        saving={savingQuote}
+        feedback={quoteFeedback}
+        onSave={() => void handleSaveQuote()}
+      />
+
+      {invalidImpacts > 0 ? (
+        <p className="flex items-start gap-2 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <AlertCircle className="mt-0.5 size-4 shrink-0" />
+          Há {invalidImpacts} impacto(s) de produtividade fora da faixa permitida (0% a 90%). Ajuste
+          para que o cálculo fique correto.
         </p>
+      ) : null}
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <div className="flex flex-1 flex-col gap-1.5">
-            <Label htmlFor="sim-reference" className="text-xs">
-              Nome/referência da obra
-            </Label>
-            <Input
-              id="sim-reference"
-              value={reference}
-              onChange={(event) => setReference(event.target.value)}
-              placeholder="Ex.: Apartamento Centro"
-              className="h-10"
-            />
-          </div>
-          <Button
-            type="button"
-            variant="light-outline"
-            className="w-full sm:w-auto"
-            disabled={savingSim}
-            onClick={() => void handleSaveSimulation()}
-          >
-            {savingSim ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
-            Salvar simulação
-          </Button>
-        </div>
+      <QuoteHistoryBlock
+        quotes={quotes}
+        closingId={closingId}
+        savingClose={savingClose}
+        feedback={closeFeedback}
+        onToggleClose={setClosingId}
+        onClose={(quote, actual) => void handleCloseQuote(quote, actual)}
+        onDelete={(id) => void handleDeleteQuote(id)}
+      />
 
-        {simFeedback ? (
-          <p className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {simFeedback}
-          </p>
-        ) : null}
-      </BlockCard>
-
-      {/* Histórico */}
-      <BlockCard
-        title="Histórico de simulações"
-        description="Suas últimas simulações salvas. Você pode excluir individualmente."
-      >
-        {history.length === 0 ? (
-          <p className="rounded-2xl border border-border/70 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-            Nenhuma simulação salva ainda.
-          </p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {history.map((item) => (
-              <div
-                key={item.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-muted/30 px-4 py-3"
-              >
-                <div className="flex min-w-0 flex-col">
-                  <span className="truncate text-sm font-semibold text-primary">
-                    {item.reference || "Sem referência"}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(item.created_at).toLocaleDateString("pt-BR")} · {item.days} dia(s) · diária{" "}
-                    {formatBRL(Number(item.daily_rate))}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="font-display text-sm font-bold text-emerald">
-                    {formatBRL(Number(item.total))}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => void handleDeleteSimulation(item.id)}
-                    aria-label="Excluir simulação"
-                    className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-destructive"
-                  >
-                    <Trash2 className="size-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </BlockCard>
+      <ServiceAveragesBlock
+        averages={averages}
+        configuredBase={parseNumber(m2PerDay)}
+        currentServiceKey={serviceProfile}
+        onApplyProductivity={(value) => setM2PerDay(String(value))}
+      />
 
       <p className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
         <Calculator className="mt-0.5 size-3.5 shrink-0" />
