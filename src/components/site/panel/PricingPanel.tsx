@@ -19,18 +19,14 @@ import {
   FIXED_RESERVE_FIELDS,
   PERSONAL_FIELDS,
   PROFESSIONAL_FIELDS,
+  calculateObra,
   calculatePricing,
-  calculateSimulation,
   createDefaultForm,
   formatBRL,
-  formatCurrencyOnBlur,
   formatCurrencyValue,
   isPercentInputValid,
-  normalizeCurrencyInput,
   parseCurrency,
   parseNumber,
-  type FieldDef,
-  type NumericForm,
   type PricingForm,
 } from "@/lib/pricing-calc";
 import {
@@ -41,6 +37,25 @@ import {
   savePricingSettings,
   type SimulationRecord,
 } from "@/lib/pricing-api";
+import {
+  SERVICE_PROFILES,
+  emptyMaterialConfig,
+  estimateDays,
+  estimateMaterial,
+  totalMaterialsCost,
+  totalNetArea,
+  type MaterialRecord,
+  type ServiceMaterialRow,
+  type SurfaceRow,
+} from "@/lib/pricing-materials";
+import {
+  loadMaterialCatalog,
+  loadServiceMaterials,
+  saveServiceMaterials,
+} from "@/lib/pricing-materials-api";
+import { BlockCard, FieldGrid, FieldInput, ResultCard } from "./pricing/PricingUi";
+import { MeasurementsBlock } from "./pricing/MeasurementsBlock";
+import { MaterialsBlock } from "./pricing/MaterialsBlock";
 import { cn } from "@/lib/utils";
 
 /* ------------------------------------------------------------------ */
@@ -51,9 +66,9 @@ const MARGIN_PRESETS = [20, 30, 40, 50];
 const PREMIUM_PRESETS = [15, 20, 30];
 
 const BASE_OPTIONS = [
-  { key: "minima", label: "Diária mínima" },
-  { key: "ideal", label: "Diária ideal" },
-  { key: "premium", label: "Diária premium" },
+  { key: "minima", label: "Diária mínima", obraKey: "minimum" },
+  { key: "ideal", label: "Diária ideal", obraKey: "ideal" },
+  { key: "premium", label: "Diária premium", obraKey: "premium" },
 ] as const;
 
 type BaseKey = (typeof BASE_OPTIONS)[number]["key"];
@@ -67,145 +82,22 @@ const SIMULATOR_FIELDS: { key: string; label: string; kind: "plain" | "currency"
   { key: "contingency", label: "Percentual de imprevistos", kind: "percent" },
 ];
 
-/* ------------------------------- Inputs ---------------------------------- */
-
-const FieldInput = ({
-  id,
-  label,
-  value,
-  kind,
-  invalid = false,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  kind: "plain" | "currency" | "percent";
-  invalid?: boolean;
-  onChange: (value: string) => void;
-}) => (
-  <div className="flex flex-col gap-1.5">
-    <Label htmlFor={id} className="text-xs">
-      {label}
-    </Label>
-    <div className="relative">
-      {kind === "currency" ? (
-        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">
-          R$
-        </span>
-      ) : null}
-      <Input
-        id={id}
-        inputMode={kind === "plain" ? "decimal" : kind === "currency" ? "numeric" : "decimal"}
-        value={value}
-        onChange={(event) =>
-          onChange(
-            kind === "currency" ? normalizeCurrencyInput(event.target.value) : event.target.value,
-          )
-        }
-        onBlur={
-          kind === "currency" ? () => onChange(formatCurrencyOnBlur(value)) : undefined
-        }
-        placeholder={kind === "currency" ? "0,00" : "0"}
-        className={cn(
-          "h-10",
-          kind === "currency" && "pl-9",
-          kind === "percent" && "pr-8",
-          invalid && "border-destructive focus-visible:ring-destructive/20",
-        )}
-      />
-      {kind === "percent" ? (
-        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">
-          %
-        </span>
-      ) : null}
-    </div>
-  </div>
-);
-
-const FieldGrid = ({
-  fields,
-  values,
-  idPrefix,
-  kind,
-  isInvalid,
-  onChange,
-}: {
-  fields: FieldDef[];
-  values: NumericForm;
-  idPrefix: string;
-  kind: "plain" | "currency" | "percent";
-  isInvalid?: (key: string) => boolean;
-  onChange: (key: string, value: string) => void;
-}) => (
-  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-    {fields.map((field) => (
-      <FieldInput
-        key={field.key}
-        id={`${idPrefix}-${field.key}`}
-        label={field.label}
-        kind={kind}
-        value={values[field.key] ?? ""}
-        invalid={isInvalid?.(field.key) ?? false}
-        onChange={(value) => onChange(field.key, value)}
-      />
-    ))}
-  </div>
-);
-
-const BlockCard = ({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description?: string;
-  children: React.ReactNode;
-}) => (
-  <div className="flex flex-col gap-4 rounded-3xl border border-border/70 bg-card p-5 shadow-card sm:p-6">
-    <div>
-      <h3 className="font-display text-base font-bold text-primary">{title}</h3>
-      {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
-    </div>
-    {children}
-  </div>
-);
-
-const ResultCard = ({
-  label,
-  value,
-  hint,
-  highlight = false,
-}: {
-  label: string;
-  value: number;
-  hint: string;
-  highlight?: boolean;
-}) => (
-  <div
-    className={cn(
-      "flex flex-col gap-1 rounded-2xl border p-4",
-      highlight ? "border-emerald/40 bg-emerald/10" : "border-border/70 bg-muted/30",
-    )}
-  >
-    <span className="text-[0.68rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-      {label}
-    </span>
-    <span className={cn("font-display text-xl font-extrabold", highlight ? "text-emerald" : "text-primary")}>
-      {formatBRL(value)}
-    </span>
-    <span className="text-[0.7rem] leading-snug text-muted-foreground">{hint}</span>
-  </div>
-);
-
-/* ------------------------------- Painel ---------------------------------- */
-
 export const PricingPanel = () => {
   const [userId, setUserId] = useState<string | null>(null);
   const [form, setForm] = useState<PricingForm>(createDefaultForm);
+  const [surfaces, setSurfaces] = useState<SurfaceRow[]>([]);
+  const [serviceProfile, setServiceProfile] = useState<string>(SERVICE_PROFILES[0].key);
+  const [m2PerDay, setM2PerDay] = useState("");
+  const [catalog, setCatalog] = useState<MaterialRecord[]>([]);
+  const [serviceRows, setServiceRows] = useState<ServiceMaterialRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [materialSaving, setMaterialSaving] = useState(false);
+  const [materialFeedback, setMaterialFeedback] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
   const [sim, setSim] = useState({
     days: "5",
@@ -231,9 +123,19 @@ export const PricingPanel = () => {
       setUserId(id);
 
       if (id) {
-        const [saved, sims] = await Promise.all([loadPricingSettings(id), listSimulations(id)]);
+        const [bundle, sims, materials] = await Promise.all([
+          loadPricingSettings(id),
+          listSimulations(id),
+          loadMaterialCatalog(),
+        ]);
         if (!active) return;
-        if (saved) setForm(saved);
+        if (bundle) {
+          setForm(bundle.form);
+          setSurfaces(bundle.surfaces);
+          setServiceProfile(bundle.serviceProfile);
+          setM2PerDay(bundle.m2PerDay);
+        }
+        setCatalog(materials);
         setHistory(sims);
       }
       setLoading(false);
@@ -244,7 +146,41 @@ export const PricingPanel = () => {
     };
   }, []);
 
+  /* Materiais do serviço selecionado (carrega ao trocar de serviço). */
+  useEffect(() => {
+    let active = true;
+    if (catalog.length === 0) return;
+
+    void (async () => {
+      const rows = await loadServiceMaterials(serviceProfile, catalog);
+      if (!active) return;
+      setServiceRows(
+        rows.length > 0
+          ? rows
+          : catalog.map((material) => ({
+              material,
+              config: emptyMaterialConfig(material.id),
+              sortOrder: 0,
+            })),
+      );
+      setMaterialFeedback(null);
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [serviceProfile, catalog]);
+
   const result = useMemo(() => calculatePricing(form), [form]);
+
+  const netArea = useMemo(() => totalNetArea(surfaces), [surfaces]);
+  const estimatedDays = estimateDays(netArea, parseNumber(m2PerDay));
+
+  const estimates = useMemo(
+    () => serviceRows.map((row) => estimateMaterial(row.config, row.material, netArea)),
+    [serviceRows, netArea],
+  );
+  const materialsCost = useMemo(() => totalMaterialsCost(estimates), [estimates]);
 
   const invalidPercents = useMemo(() => {
     const list: string[] = [];
@@ -254,29 +190,35 @@ export const PricingPanel = () => {
     if (!isPercentInputValid(form.margin)) list.push("Margem de lucro");
     if (!isPercentInputValid(form.premiumExtra)) list.push("Adicional premium");
     if (!isPercentInputValid(sim.contingency)) list.push("Imprevistos da obra");
+    serviceRows.forEach((row) => {
+      if (!isPercentInputValid(row.config.wastePercent)) {
+        list.push(`Desperdício de ${row.material.name}`);
+      }
+    });
     return list;
-  }, [form, sim.contingency]);
+  }, [form, sim.contingency, serviceRows]);
 
-  const baseDaily =
-    base === "minima"
-      ? result.minimumDaily
-      : base === "premium"
-        ? result.premiumDaily
-        : result.idealDaily;
-
-  const simulation = useMemo(
+  const obra = useMemo(
     () =>
-      calculateSimulation({
+      calculateObra({
         days: parseNumber(sim.days),
         helpers: parseNumber(sim.helpers),
         helperRate: parseCurrency(sim.helperRate),
         travel: parseCurrency(sim.travel),
         otherCosts: parseCurrency(sim.otherCosts),
         contingency: parseNumber(sim.contingency),
-        baseDaily,
+        materialsCost,
+        dailyRates: {
+          minimum: result.minimumDaily,
+          ideal: result.idealDaily,
+          premium: result.premiumDaily,
+        },
       }),
-    [sim, baseDaily],
+    [sim, materialsCost, result.minimumDaily, result.idealDaily, result.premiumDaily],
   );
+
+  const selectedBase = BASE_OPTIONS.find((option) => option.key === base) ?? BASE_OPTIONS[1];
+  const breakdown = obra[selectedBase.obraKey];
 
   const updateBlock = useCallback(
     (
@@ -294,7 +236,7 @@ export const PricingPanel = () => {
     if (!userId || saving || invalidPercents.length > 0) return;
     setSaving(true);
     setFeedback(null);
-    const saved = await savePricingSettings(userId, form);
+    const saved = await savePricingSettings(userId, form, { surfaces, serviceProfile, m2PerDay });
     setSaving(false);
     setFeedback(
       saved.ok
@@ -303,12 +245,28 @@ export const PricingPanel = () => {
     );
   };
 
+  const handleSaveMaterials = async () => {
+    if (materialSaving || invalidPercents.length > 0) return;
+    setMaterialSaving(true);
+    setMaterialFeedback(null);
+    const saved = await saveServiceMaterials(serviceProfile, serviceRows);
+    setMaterialSaving(false);
+    setMaterialFeedback(
+      saved.ok
+        ? { type: "success", text: "Materiais deste serviço salvos." }
+        : { type: "error", text: saved.message ?? "Não foi possível salvar os materiais." },
+    );
+  };
+
   const handleReset = () => {
     const confirmed = window.confirm(
-      "Restaurar os valores padrão? Os campos preenchidos serão substituídos pelos valores sugeridos. O histórico de simulações é mantido.",
+      "Restaurar os valores padrão? Os campos preenchidos (incluindo medições) serão substituídos pelos valores sugeridos. O histórico de simulações é mantido.",
     );
     if (!confirmed) return;
     setForm(createDefaultForm());
+    setSurfaces([]);
+    setM2PerDay("");
+    setServiceProfile(SERVICE_PROFILES[0].key);
     setFeedback({
       type: "success",
       text: "Valores padrão restaurados. Clique em “Salvar configurações” para gravar.",
@@ -322,8 +280,13 @@ export const PricingPanel = () => {
     const saved = await addSimulation(userId, {
       reference,
       days: parseNumber(sim.days),
-      dailyRate: baseDaily,
-      total: simulation.suggested,
+      dailyRate:
+        selectedBase.key === "minima"
+          ? result.minimumDaily
+          : selectedBase.key === "premium"
+            ? result.premiumDaily
+            : result.idealDaily,
+      total: breakdown.total,
     });
     setSavingSim(false);
 
@@ -377,11 +340,7 @@ export const PricingPanel = () => {
 
       {/* Resultados */}
       <div className="grid gap-3 sm:grid-cols-3">
-        <ResultCard
-          label="Diária mínima"
-          value={result.minimumDaily}
-          hint="Cobre seus custos e reservas."
-        />
+        <ResultCard label="Diária mínima" value={result.minimumDaily} hint="Cobre seus custos e reservas." />
         <ResultCard
           label="Diária ideal"
           value={result.idealDaily}
@@ -510,7 +469,10 @@ export const PricingPanel = () => {
       </BlockCard>
 
       {/* Margem */}
-      <BlockCard title="Margem de lucro desejada" description="Sugestões rápidas ou valor personalizado (0% a 100%).">
+      <BlockCard
+        title="Margem de lucro desejada"
+        description="Sugestões rápidas ou valor personalizado (0% a 100%)."
+      >
         <div className="flex flex-wrap items-center gap-2">
           {MARGIN_PRESETS.map((preset) => (
             <button
@@ -593,6 +555,28 @@ export const PricingPanel = () => {
         </div>
       </BlockCard>
 
+      {/* Medição por m² */}
+      <MeasurementsBlock
+        surfaces={surfaces}
+        m2PerDay={m2PerDay}
+        onSurfacesChange={setSurfaces}
+        onM2PerDayChange={setM2PerDay}
+      />
+
+      {/* Materiais */}
+      <MaterialsBlock
+        serviceKey={serviceProfile}
+        rows={serviceRows}
+        estimates={estimates}
+        area={netArea}
+        totalCost={materialsCost}
+        saving={materialSaving}
+        feedback={materialFeedback}
+        onServiceChange={setServiceProfile}
+        onRowsChange={setServiceRows}
+        onSave={() => void handleSaveMaterials()}
+      />
+
       {/* Aviso de percentual inválido */}
       {invalidPercents.length > 0 ? (
         <p className="flex items-start gap-2 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -641,7 +625,7 @@ export const PricingPanel = () => {
       {/* Simulador de obra */}
       <BlockCard
         title="Simular mão de obra de uma obra"
-        description="Escolha a base de diária e veja o preço sugerido para o serviço."
+        description="Escolha a base de diária e veja o preço sugerido, já com os materiais estimados."
       >
         <div className="flex flex-wrap gap-2">
           {BASE_OPTIONS.map((option) => (
@@ -662,9 +646,27 @@ export const PricingPanel = () => {
           ))}
         </div>
 
-        <p className="text-xs font-semibold text-muted-foreground">
-          Diária base usada: {formatBRL(baseDaily)}
-        </p>
+        <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-muted-foreground">
+          <span>
+            Diária base usada:{" "}
+            {formatBRL(
+              selectedBase.key === "minima"
+                ? result.minimumDaily
+                : selectedBase.key === "premium"
+                  ? result.premiumDaily
+                  : result.idealDaily,
+            )}
+          </span>
+          {estimatedDays !== null ? (
+            <button
+              type="button"
+              onClick={() => setSim((prev) => ({ ...prev, days: String(estimatedDays) }))}
+              className="rounded-full border border-emerald/40 bg-emerald/10 px-3 py-1 font-bold text-emerald transition-colors hover:bg-emerald/20"
+            >
+              Usar {estimatedDays} dia(s) estimado(s) pelo m²
+            </button>
+          ) : null}
+        </div>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {SIMULATOR_FIELDS.map((field) => (
@@ -683,27 +685,52 @@ export const PricingPanel = () => {
         <div className="flex flex-col gap-2 rounded-2xl border border-border/70 bg-muted/30 p-4 text-sm">
           <div className="flex items-center justify-between gap-3">
             <span className="text-muted-foreground">Minha mão de obra</span>
-            <span className="font-semibold text-primary">{formatBRL(simulation.labor)}</span>
+            <span className="font-semibold text-primary">{formatBRL(breakdown.labor)}</span>
           </div>
           <div className="flex items-center justify-between gap-3">
             <span className="text-muted-foreground">Custo dos ajudantes</span>
-            <span className="font-semibold text-primary">{formatBRL(simulation.helpersCost)}</span>
+            <span className="font-semibold text-primary">{formatBRL(breakdown.helpers)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-muted-foreground">Materiais estimados</span>
+            <span className="font-semibold text-primary">{formatBRL(breakdown.materials)}</span>
           </div>
           <div className="flex items-center justify-between gap-3">
             <span className="text-muted-foreground">Custos extras</span>
-            <span className="font-semibold text-primary">{formatBRL(simulation.extras)}</span>
+            <span className="font-semibold text-primary">{formatBRL(breakdown.extras)}</span>
           </div>
           <div className="flex items-center justify-between gap-3">
             <span className="text-muted-foreground">
               Reserva/imprevistos ({parseNumber(sim.contingency)}%)
             </span>
-            <span className="font-semibold text-primary">{formatBRL(simulation.contingencyValue)}</span>
+            <span className="font-semibold text-primary">{formatBRL(breakdown.contingency)}</span>
           </div>
           <div className="mt-1 flex items-center justify-between gap-3 border-t border-border/70 pt-3">
-            <span className="font-bold text-primary">Preço sugerido de mão de obra</span>
+            <span className="font-bold text-primary">Preço sugerido ({selectedBase.label})</span>
             <span className="font-display text-lg font-extrabold text-emerald">
-              {formatBRL(simulation.suggested)}
+              {formatBRL(breakdown.total)}
             </span>
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-2xl border border-border/70 bg-muted/30 p-4">
+            <span className="text-[0.68rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+              Total mínimo
+            </span>
+            <p className="font-display text-lg font-bold text-primary">{formatBRL(obra.minimum.total)}</p>
+          </div>
+          <div className="rounded-2xl border border-emerald/40 bg-emerald/10 p-4">
+            <span className="text-[0.68rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+              Total ideal
+            </span>
+            <p className="font-display text-lg font-bold text-emerald">{formatBRL(obra.ideal.total)}</p>
+          </div>
+          <div className="rounded-2xl border border-border/70 bg-muted/30 p-4">
+            <span className="text-[0.68rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+              Total premium
+            </span>
+            <p className="font-display text-lg font-bold text-primary">{formatBRL(obra.premium.total)}</p>
           </div>
         </div>
 

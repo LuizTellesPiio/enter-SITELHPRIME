@@ -240,37 +240,63 @@ export const formatBRL = (value: number): string =>
 
 /* ---------------------------- Simulador de obra --------------------------- */
 
-export interface SimulationInput {
+export interface ObraInput {
   days: number;
   helpers: number;
   helperRate: number;
   travel: number;
   otherCosts: number;
   contingency: number;
-  baseDaily: number;
+  /** custo estimado dos materiais */
+  materialsCost: number;
+  dailyRates: { minimum: number; ideal: number; premium: number };
 }
 
-export interface SimulationResult {
+export interface ObraBreakdown {
   labor: number;
-  helpersCost: number;
+  helpers: number;
+  materials: number;
   extras: number;
-  contingencyValue: number;
-  suggested: number;
+  contingency: number;
+  total: number;
 }
 
-export const calculateSimulation = (input: SimulationInput): SimulationResult => {
+export interface ObraResult {
+  minimum: ObraBreakdown;
+  ideal: ObraBreakdown;
+  premium: ObraBreakdown;
+}
+
+/**
+ * Para cada base de diária (mínima/ideal/premium):
+ *   mão_de_obra = dias × diária
+ *   subtotal    = mão_de_obra + ajudantes + materiais + custos_extras
+ *   total       = subtotal + imprevistos%
+ */
+export const calculateObra = (input: ObraInput): ObraResult => {
   const days = Math.max(0, input.days);
-  const labor = days * Math.max(0, input.baseDaily);
-  const helpersCost = days * Math.max(0, input.helpers) * Math.max(0, input.helperRate);
+  const helpers = days * Math.max(0, input.helpers) * Math.max(0, input.helperRate);
+  const materials = Math.max(0, input.materialsCost);
   const extras = Math.max(0, input.travel) + Math.max(0, input.otherCosts);
-  const subtotal = labor + helpersCost + extras;
-  const contingencyValue = subtotal * (clampPercent(input.contingency) / 100);
+  const contingencyPercent = clampPercent(input.contingency);
+
+  const build = (daily: number): ObraBreakdown => {
+    const labor = days * Math.max(0, daily);
+    const subtotal = labor + helpers + materials + extras;
+    const contingency = subtotal * (contingencyPercent / 100);
+    return {
+      labor,
+      helpers,
+      materials,
+      extras,
+      contingency,
+      total: subtotal + contingency,
+    };
+  };
 
   return {
-    labor,
-    helpersCost,
-    extras,
-    contingencyValue,
-    suggested: subtotal + contingencyValue,
+    minimum: build(input.dailyRates.minimum),
+    ideal: build(input.dailyRates.ideal),
+    premium: build(input.dailyRates.premium),
   };
 };

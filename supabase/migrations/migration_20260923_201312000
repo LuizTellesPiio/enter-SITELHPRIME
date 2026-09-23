@@ -1,0 +1,95 @@
+create table if not exists public.pricing_materials (
+  id text primary key,
+  name text not null,
+  unit text not null default 'L',
+  sort_order integer not null default 0,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.pricing_service_materials (
+  id uuid primary key default gen_random_uuid(),
+  service_key text not null,
+  material_id text not null references public.pricing_materials(id) on delete cascade,
+  yield_m2_per_unit numeric,
+  coats numeric,
+  waste_percent numeric,
+  package_size numeric,
+  package_label text,
+  price_per_package numeric,
+  manual_packages numeric,
+  sort_order integer not null default 0,
+  updated_at timestamptz not null default now(),
+  unique (service_key, material_id)
+);
+
+create index if not exists pricing_service_materials_service_idx on public.pricing_service_materials (service_key, sort_order);
+
+alter table public.pricing_materials enable row level security;
+alter table public.pricing_service_materials enable row level security;
+
+create policy pricing_materials_admin_all on public.pricing_materials for all using (is_admin()) with check (is_admin());
+create policy pricing_service_materials_admin_all on public.pricing_service_materials for all using (is_admin()) with check (is_admin());
+
+alter table public.pricing_settings
+  add column if not exists surfaces jsonb not null default '[]'::jsonb,
+  add column if not exists service_profile text,
+  add column if not exists m2_per_day numeric;
+
+insert into public.pricing_materials (id, name, unit, sort_order) values
+('tinta', 'Tinta', 'L', 1),
+('selador', 'Selador', 'L', 2),
+('fundo_preparador', 'Fundo preparador', 'L', 3),
+('massa_corrida', 'Massa corrida', 'kg', 4),
+('massa_acrilica', 'Massa acrílica', 'kg', 5),
+('textura', 'Textura', 'kg', 6),
+('cimento_queimado', 'Cimento queimado', 'kg', 7),
+('esmalte', 'Esmalte', 'L', 8),
+('primer', 'Primer', 'L', 9),
+('protecao_final', 'Proteção final/PU', 'L', 10),
+('lixas', 'Lixas', 'un', 11),
+('fita_crepe', 'Fita crepe', 'un', 12),
+('lona', 'Lona', 'un', 13)
+on conflict (id) do nothing;
+
+insert into public.pricing_service_materials (service_key, material_id, sort_order) values
+('pintura_comum', 'tinta', 1),
+('pintura_comum', 'fita_crepe', 2),
+('pintura_comum', 'lona', 3),
+('selador_pintura', 'selador', 1),
+('selador_pintura', 'tinta', 2),
+('selador_pintura', 'fita_crepe', 3),
+('selador_pintura', 'lona', 4),
+('fundo_pintura', 'fundo_preparador', 1),
+('fundo_pintura', 'tinta', 2),
+('fundo_pintura', 'lixas', 3),
+('fundo_pintura', 'fita_crepe', 4),
+('fundo_pintura', 'lona', 5),
+('massa_corrida_pintura', 'massa_corrida', 1),
+('massa_corrida_pintura', 'lixas', 2),
+('massa_corrida_pintura', 'selador', 3),
+('massa_corrida_pintura', 'tinta', 4),
+('massa_corrida_pintura', 'fita_crepe', 5),
+('massa_corrida_pintura', 'lona', 6),
+('massa_acrilica_pintura', 'massa_acrilica', 1),
+('massa_acrilica_pintura', 'lixas', 2),
+('massa_acrilica_pintura', 'fundo_preparador', 3),
+('massa_acrilica_pintura', 'tinta', 4),
+('massa_acrilica_pintura', 'fita_crepe', 5),
+('massa_acrilica_pintura', 'lona', 6),
+('textura_rolada', 'textura', 1),
+('textura_rolada', 'fundo_preparador', 2),
+('textura_rolada', 'fita_crepe', 3),
+('textura_rolada', 'lona', 4),
+('cimento_queimado', 'cimento_queimado', 1),
+('cimento_queimado', 'selador', 2),
+('cimento_queimado', 'protecao_final', 3),
+('cimento_queimado', 'lixas', 4),
+('cimento_queimado', 'fita_crepe', 5),
+('cimento_queimado', 'lona', 6),
+('esmalte_metal', 'primer', 1),
+('esmalte_metal', 'esmalte', 2),
+('esmalte_metal', 'lixas', 3),
+('esmalte_metal', 'fita_crepe', 4),
+('esmalte_metal', 'protecao_final', 5)
+on conflict (service_key, material_id) do nothing;

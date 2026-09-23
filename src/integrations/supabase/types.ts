@@ -3535,16 +3535,98 @@ export type Database = {
           },
         ]
       }
+      pricing_materials: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          sort_order: number
+          unit: string
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          is_active?: boolean
+          name: string
+          sort_order?: number
+          unit?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          sort_order?: number
+          unit?: string
+        }
+        Relationships: []
+      }
+      pricing_service_materials: {
+        Row: {
+          coats: number | null
+          id: string
+          manual_packages: number | null
+          material_id: string
+          package_label: string | null
+          package_size: number | null
+          price_per_package: number | null
+          service_key: string
+          sort_order: number
+          updated_at: string
+          waste_percent: number | null
+          yield_m2_per_unit: number | null
+        }
+        Insert: {
+          coats?: number | null
+          id?: string
+          manual_packages?: number | null
+          material_id: string
+          package_label?: string | null
+          package_size?: number | null
+          price_per_package?: number | null
+          service_key: string
+          sort_order?: number
+          updated_at?: string
+          waste_percent?: number | null
+          yield_m2_per_unit?: number | null
+        }
+        Update: {
+          coats?: number | null
+          id?: string
+          manual_packages?: number | null
+          material_id?: string
+          package_label?: string | null
+          package_size?: number | null
+          price_per_package?: number | null
+          service_key?: string
+          sort_order?: number
+          updated_at?: string
+          waste_percent?: number | null
+          yield_m2_per_unit?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pricing_service_materials_material_id_fkey"
+            columns: ["material_id"]
+            referencedRelation: "pricing_materials"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pricing_settings: {
         Row: {
           capacity: Json
           charges: Json
           charges_percent: Json
           fixed_reserves: Json
+          m2_per_day: number | null
           personal_costs: Json
           premium_extra: number
           professional_costs: Json
           profit_margin: number
+          service_profile: string | null
+          surfaces: Json
           updated_at: string
           user_id: string
         }
@@ -3553,10 +3635,13 @@ export type Database = {
           charges?: Json
           charges_percent?: Json
           fixed_reserves?: Json
+          m2_per_day?: number | null
           personal_costs?: Json
           premium_extra?: number
           professional_costs?: Json
           profit_margin?: number
+          service_profile?: string | null
+          surfaces?: Json
           updated_at?: string
           user_id: string
         }
@@ -3565,10 +3650,13 @@ export type Database = {
           charges?: Json
           charges_percent?: Json
           fixed_reserves?: Json
+          m2_per_day?: number | null
           personal_costs?: Json
           premium_extra?: number
           professional_costs?: Json
           profit_margin?: number
+          service_profile?: string | null
+          surfaces?: Json
           updated_at?: string
           user_id?: string
         }

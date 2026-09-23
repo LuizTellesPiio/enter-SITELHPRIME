@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { SERVICE_PROFILES, type SurfaceRow } from "./pricing-materials";
 import {
   CAPACITY_FIELDS,
   CHARGE_FIELDS,
@@ -55,12 +56,40 @@ const toCurrencyMap = (form: NumericForm, fields: FieldDef[]): Record<string, nu
 const toPlainMap = (form: NumericForm, fields: FieldDef[]): Record<string, number> =>
   Object.fromEntries(fields.map((field) => [field.key, parseNumber(form[field.key])]));
 
+/** Superfícies medidas (bloco por m²). */
+const asSurfaces = (value: unknown): SurfaceRow[] => {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const row = item as Record<string, unknown>;
+    const toText = (raw: unknown): string =>
+      raw === null || raw === undefined ? "" : String(raw);
+    return [
+      {
+        id: toText(row.id) || crypto.randomUUID(),
+        label: toText(row.label),
+        width: toText(row.width),
+        height: toText(row.height),
+        openings: toText(row.openings),
+        quantity: toText(row.quantity) || "1",
+      },
+    ];
+  });
+};
+
+export interface PricingSettingsBundle {
+  form: PricingForm;
+  surfaces: SurfaceRow[];
+  serviceProfile: string;
+  m2PerDay: string;
+}
+
 /** Carrega as configurações salvas do admin (null se ainda não existir). */
-export const loadPricingSettings = async (userId: string): Promise<PricingForm | null> => {
+export const loadPricingSettings = async (userId: string): Promise<PricingSettingsBundle | null> => {
   const { data, error } = await supabase
     .from("pricing_settings")
     .select(
-      "personal_costs, professional_costs, fixed_reserves, charges_percent, capacity, profit_margin, premium_extra",
+      "personal_costs, professional_costs, fixed_reserves, charges_percent, capacity, profit_margin, premium_extra, surfaces, service_profile, m2_per_day",
     )
     .eq("user_id", userId)
     .maybeSingle();
@@ -71,19 +100,27 @@ export const loadPricingSettings = async (userId: string): Promise<PricingForm |
   const capacity = asPlainMap(data.capacity);
 
   return {
-    personal: { ...defaults.personal, ...asCurrencyMap(data.personal_costs) },
-    professional: { ...defaults.professional, ...asCurrencyMap(data.professional_costs) },
-    fixedReserves: { ...defaults.fixedReserves, ...asCurrencyMap(data.fixed_reserves) },
-    charges: { ...defaults.charges, ...asPlainMap(data.charges_percent) },
-    capacity: Object.keys(capacity).length > 0 ? capacity : defaults.capacity,
-    margin:
-      data.profit_margin !== null && data.profit_margin !== undefined
-        ? String(Math.max(0, Number(data.profit_margin) || 0))
-        : defaults.margin,
-    premiumExtra:
-      data.premium_extra !== null && data.premium_extra !== undefined
-        ? String(Math.max(0, Number(data.premium_extra) || 0))
-        : defaults.premiumExtra,
+    form: {
+      personal: { ...defaults.personal, ...asCurrencyMap(data.personal_costs) },
+      professional: { ...defaults.professional, ...asCurrencyMap(data.professional_costs) },
+      fixedReserves: { ...defaults.fixedReserves, ...asCurrencyMap(data.fixed_reserves) },
+      charges: { ...defaults.charges, ...asPlainMap(data.charges_percent) },
+      capacity: Object.keys(capacity).length > 0 ? capacity : defaults.capacity,
+      margin:
+        data.profit_margin !== null && data.profit_margin !== undefined
+          ? String(Math.max(0, Number(data.profit_margin) || 0))
+          : defaults.margin,
+      premiumExtra:
+        data.premium_extra !== null && data.premium_extra !== undefined
+          ? String(Math.max(0, Number(data.premium_extra) || 0))
+          : defaults.premiumExtra,
+    },
+    surfaces: asSurfaces(data.surfaces),
+    serviceProfile: data.service_profile ?? SERVICE_PROFILES[0].key,
+    m2PerDay:
+      data.m2_per_day !== null && data.m2_per_day !== undefined
+        ? String(Math.max(0, Number(data.m2_per_day) || 0))
+        : "",
   };
 };
 
@@ -91,6 +128,7 @@ export const loadPricingSettings = async (userId: string): Promise<PricingForm |
 export const savePricingSettings = async (
   userId: string,
   form: PricingForm,
+  extras: { surfaces: SurfaceRow[]; serviceProfile: string; m2PerDay: string },
 ): Promise<{ ok: boolean; message?: string }> => {
   /* Nunca grava percentual fora de 0–100. */
   const invalidPercent =
@@ -112,6 +150,9 @@ export const savePricingSettings = async (
       capacity: toPlainMap(form.capacity, CAPACITY_FIELDS),
       profit_margin: parseNumber(form.margin),
       premium_extra: parseNumber(form.premiumExtra),
+      surfaces: extras.surfaces,
+      service_profile: extras.serviceProfile,
+      m2_per_day: parseNumber(extras.m2PerDay) || null,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "user_id" },
