@@ -4,6 +4,7 @@ import {
   Calculator,
   Loader2,
   Plus,
+  RotateCcw,
   Save,
   Trash2,
   TrendingUp,
@@ -15,12 +16,18 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   CAPACITY_FIELDS,
   CHARGE_FIELDS,
+  FIXED_RESERVE_FIELDS,
   PERSONAL_FIELDS,
   PROFESSIONAL_FIELDS,
   calculatePricing,
   calculateSimulation,
   createDefaultForm,
   formatBRL,
+  formatCurrencyOnBlur,
+  formatCurrencyValue,
+  isPercentInputValid,
+  normalizeCurrencyInput,
+  parseCurrency,
   parseNumber,
   type FieldDef,
   type NumericForm,
@@ -41,7 +48,7 @@ import { cn } from "@/lib/utils";
 /* ------------------------------------------------------------------ */
 
 const MARGIN_PRESETS = [20, 30, 40, 50];
-const PREMIUM_PRESETS = [10, 20, 30];
+const PREMIUM_PRESETS = [15, 20, 30];
 
 const BASE_OPTIONS = [
   { key: "minima", label: "Diária mínima" },
@@ -51,32 +58,97 @@ const BASE_OPTIONS = [
 
 type BaseKey = (typeof BASE_OPTIONS)[number]["key"];
 
-const CostFields = ({
+const SIMULATOR_FIELDS: { key: string; label: string; kind: "plain" | "currency" | "percent" }[] = [
+  { key: "days", label: "Número estimado de dias", kind: "plain" },
+  { key: "helpers", label: "Quantidade de ajudantes", kind: "plain" },
+  { key: "helperRate", label: "Diária de cada ajudante", kind: "currency" },
+  { key: "travel", label: "Deslocamento total", kind: "currency" },
+  { key: "otherCosts", label: "Outros custos diretos", kind: "currency" },
+  { key: "contingency", label: "Percentual de imprevistos", kind: "percent" },
+];
+
+/* ------------------------------- Inputs ---------------------------------- */
+
+const FieldInput = ({
+  id,
+  label,
+  value,
+  kind,
+  invalid = false,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  kind: "plain" | "currency" | "percent";
+  invalid?: boolean;
+  onChange: (value: string) => void;
+}) => (
+  <div className="flex flex-col gap-1.5">
+    <Label htmlFor={id} className="text-xs">
+      {label}
+    </Label>
+    <div className="relative">
+      {kind === "currency" ? (
+        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">
+          R$
+        </span>
+      ) : null}
+      <Input
+        id={id}
+        inputMode={kind === "plain" ? "decimal" : kind === "currency" ? "numeric" : "decimal"}
+        value={value}
+        onChange={(event) =>
+          onChange(
+            kind === "currency" ? normalizeCurrencyInput(event.target.value) : event.target.value,
+          )
+        }
+        onBlur={
+          kind === "currency" ? () => onChange(formatCurrencyOnBlur(value)) : undefined
+        }
+        placeholder={kind === "currency" ? "0,00" : "0"}
+        className={cn(
+          "h-10",
+          kind === "currency" && "pl-9",
+          kind === "percent" && "pr-8",
+          invalid && "border-destructive focus-visible:ring-destructive/20",
+        )}
+      />
+      {kind === "percent" ? (
+        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">
+          %
+        </span>
+      ) : null}
+    </div>
+  </div>
+);
+
+const FieldGrid = ({
   fields,
   values,
   idPrefix,
+  kind,
+  isInvalid,
   onChange,
 }: {
   fields: FieldDef[];
   values: NumericForm;
   idPrefix: string;
+  kind: "plain" | "currency" | "percent";
+  isInvalid?: (key: string) => boolean;
   onChange: (key: string, value: string) => void;
 }) => (
   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
     {fields.map((field) => (
-      <div key={field.key} className="flex flex-col gap-1.5">
-        <Label htmlFor={`${idPrefix}-${field.key}`} className="text-xs">
-          {field.label}
-        </Label>
-        <Input
-          id={`${idPrefix}-${field.key}`}
-          inputMode="decimal"
-          value={values[field.key] ?? ""}
-          onChange={(event) => onChange(field.key, event.target.value)}
-          placeholder="0,00"
-          className="h-10"
-        />
-      </div>
+      <FieldInput
+        key={field.key}
+        id={`${idPrefix}-${field.key}`}
+        label={field.label}
+        kind={kind}
+        value={values[field.key] ?? ""}
+        invalid={isInvalid?.(field.key) ?? false}
+        onChange={(value) => onChange(field.key, value)}
+      />
     ))}
   </div>
 );
@@ -126,6 +198,8 @@ const ResultCard = ({
   </div>
 );
 
+/* ------------------------------- Painel ---------------------------------- */
+
 export const PricingPanel = () => {
   const [userId, setUserId] = useState<string | null>(null);
   const [form, setForm] = useState<PricingForm>(createDefaultForm);
@@ -136,9 +210,9 @@ export const PricingPanel = () => {
   const [sim, setSim] = useState({
     days: "5",
     helpers: "1",
-    helperRate: "150",
-    travel: "100",
-    otherCosts: "0",
+    helperRate: formatCurrencyValue(150),
+    travel: formatCurrencyValue(100),
+    otherCosts: "",
     contingency: "10",
   });
   const [base, setBase] = useState<BaseKey>("ideal");
@@ -172,6 +246,17 @@ export const PricingPanel = () => {
 
   const result = useMemo(() => calculatePricing(form), [form]);
 
+  const invalidPercents = useMemo(() => {
+    const list: string[] = [];
+    CHARGE_FIELDS.forEach((field) => {
+      if (!isPercentInputValid(form.charges[field.key])) list.push(field.label);
+    });
+    if (!isPercentInputValid(form.margin)) list.push("Margem de lucro");
+    if (!isPercentInputValid(form.premiumExtra)) list.push("Adicional premium");
+    if (!isPercentInputValid(sim.contingency)) list.push("Imprevistos da obra");
+    return list;
+  }, [form, sim.contingency]);
+
   const baseDaily =
     base === "minima"
       ? result.minimumDaily
@@ -184,9 +269,9 @@ export const PricingPanel = () => {
       calculateSimulation({
         days: parseNumber(sim.days),
         helpers: parseNumber(sim.helpers),
-        helperRate: parseNumber(sim.helperRate),
-        travel: parseNumber(sim.travel),
-        otherCosts: parseNumber(sim.otherCosts),
+        helperRate: parseCurrency(sim.helperRate),
+        travel: parseCurrency(sim.travel),
+        otherCosts: parseCurrency(sim.otherCosts),
         contingency: parseNumber(sim.contingency),
         baseDaily,
       }),
@@ -194,7 +279,11 @@ export const PricingPanel = () => {
   );
 
   const updateBlock = useCallback(
-    (block: "personal" | "professional" | "charges" | "capacity", key: string, value: string) => {
+    (
+      block: "personal" | "professional" | "fixedReserves" | "charges" | "capacity",
+      key: string,
+      value: string,
+    ) => {
       setForm((prev) => ({ ...prev, [block]: { ...prev[block], [key]: value } }));
       setFeedback(null);
     },
@@ -202,7 +291,7 @@ export const PricingPanel = () => {
   );
 
   const handleSave = async () => {
-    if (!userId || saving) return;
+    if (!userId || saving || invalidPercents.length > 0) return;
     setSaving(true);
     setFeedback(null);
     const saved = await savePricingSettings(userId, form);
@@ -212,6 +301,18 @@ export const PricingPanel = () => {
         ? { type: "success", text: "Configurações salvas. Você não precisa preencher tudo de novo." }
         : { type: "error", text: saved.message ?? "Não foi possível salvar agora." },
     );
+  };
+
+  const handleReset = () => {
+    const confirmed = window.confirm(
+      "Restaurar os valores padrão? Os campos preenchidos serão substituídos pelos valores sugeridos. O histórico de simulações é mantido.",
+    );
+    if (!confirmed) return;
+    setForm(createDefaultForm());
+    setFeedback({
+      type: "success",
+      text: "Valores padrão restaurados. Clique em “Salvar configurações” para gravar.",
+    });
   };
 
   const handleSaveSimulation = async () => {
@@ -268,8 +369,8 @@ export const PricingPanel = () => {
             {formatBRL(result.idealDaily)}
           </span>
           <span className="max-w-xl text-sm leading-relaxed text-white/85">
-            Baseada em {result.productiveDays} dia(s) produtivo(s) por mês, com margem de{" "}
-            {parseNumber(form.margin)}% e custos totais de {formatBRL(result.monthlyTotal)}.
+            {result.productiveDays} dia(s) produtivo(s) por mês · margem de{" "}
+            {parseNumber(form.margin)}% · custo mensal total de {formatBRL(result.monthlyTotal)}.
           </span>
         </div>
       </div>
@@ -279,18 +380,18 @@ export const PricingPanel = () => {
         <ResultCard
           label="Diária mínima"
           value={result.minimumDaily}
-          hint="Cobre exatamente seus custos, sem lucro."
+          hint="Cobre seus custos e reservas."
         />
         <ResultCard
           label="Diária ideal"
           value={result.idealDaily}
-          hint={`Custos + ${parseNumber(form.margin)}% de margem.`}
+          hint="Cobre custos + margem de lucro."
           highlight
         />
         <ResultCard
           label="Diária premium"
           value={result.premiumDaily}
-          hint={`Ideal + ${parseNumber(form.premiumExtra)}% para serviços especializados.`}
+          hint="Valor indicado para serviços especializados, maior complexidade ou acabamento de alto padrão."
         />
       </div>
 
@@ -326,10 +427,11 @@ export const PricingPanel = () => {
         title="Custos pessoais mensais"
         description="Quanto você precisa por mês para viver. Deixe em branco o que não se aplica."
       >
-        <CostFields
+        <FieldGrid
           fields={PERSONAL_FIELDS}
           values={form.personal}
           idPrefix="personal"
+          kind="currency"
           onChange={(key, value) => updateBlock("personal", key, value)}
         />
         <p className="rounded-2xl border border-primary/20 bg-secondary/50 px-4 py-3 text-sm font-bold text-primary">
@@ -342,10 +444,11 @@ export const PricingPanel = () => {
         title="Custos profissionais"
         description="O que o trabalho consome por mês: veículo, ferramentas, materiais, ajudante."
       >
-        <CostFields
+        <FieldGrid
           fields={PROFESSIONAL_FIELDS}
           values={form.professional}
           idPrefix="professional"
+          kind="currency"
           onChange={(key, value) => updateBlock("professional", key, value)}
         />
         <p className="rounded-2xl border border-primary/20 bg-secondary/50 px-4 py-3 text-sm font-bold text-primary">
@@ -353,20 +456,39 @@ export const PricingPanel = () => {
         </p>
       </BlockCard>
 
-      {/* Reservas e encargos */}
+      {/* Reservas fixas (R$) */}
       <BlockCard
-        title="Reservas e encargos"
-        description="Percentuais aplicados sobre a soma dos custos (pessoais + profissionais)."
+        title="Reservas fixas mensais (R$)"
+        description="Valores em reais somados aos custos — nunca interpretados como percentual."
       >
-        <CostFields
+        <FieldGrid
+          fields={FIXED_RESERVE_FIELDS}
+          values={form.fixedReserves}
+          idPrefix="reserve"
+          kind="currency"
+          onChange={(key, value) => updateBlock("fixedReserves", key, value)}
+        />
+        <p className="rounded-2xl border border-primary/20 bg-secondary/50 px-4 py-3 text-sm font-bold text-primary">
+          Total de reservas fixas: {formatBRL(result.fixedReserves)}
+        </p>
+      </BlockCard>
+
+      {/* Encargos percentuais (%) */}
+      <BlockCard
+        title="Encargos percentuais (%)"
+        description="Percentuais aplicados sobre custos + reservas fixas. Aceito de 0% a 100%."
+      >
+        <FieldGrid
           fields={CHARGE_FIELDS}
           values={form.charges}
           idPrefix="charges"
+          kind="percent"
+          isInvalid={(key) => !isPercentInputValid(form.charges[key])}
           onChange={(key, value) => updateBlock("charges", key, value)}
         />
         <p className="text-xs leading-relaxed text-muted-foreground">
-          Reservas somadas: {result.chargesPercent}% · impacto de{" "}
-          {formatBRL(result.monthlyTotal - result.baseCosts)} por mês.
+          Encargos somados: {result.chargesPercent}% · impacto de {formatBRL(result.chargesValue)} por
+          mês sobre {formatBRL(result.baseWithReserves)}.
         </p>
       </BlockCard>
 
@@ -375,10 +497,11 @@ export const PricingPanel = () => {
         title="Capacidade produtiva"
         description="O cálculo usa os dias realmente produtivos, não os 30 dias do mês."
       >
-        <CostFields
+        <FieldGrid
           fields={CAPACITY_FIELDS}
           values={form.capacity}
           idPrefix="capacity"
+          kind="plain"
           onChange={(key, value) => updateBlock("capacity", key, value)}
         />
         <p className="rounded-2xl border border-primary/20 bg-secondary/50 px-4 py-3 text-sm font-bold text-primary">
@@ -387,8 +510,8 @@ export const PricingPanel = () => {
       </BlockCard>
 
       {/* Margem */}
-      <BlockCard title="Margem de lucro desejada" description="Sugestões rápidas ou valor personalizado.">
-        <div className="flex flex-wrap gap-2">
+      <BlockCard title="Margem de lucro desejada" description="Sugestões rápidas ou valor personalizado (0% a 100%).">
+        <div className="flex flex-wrap items-center gap-2">
           {MARGIN_PRESETS.map((preset) => (
             <button
               key={preset}
@@ -415,7 +538,10 @@ export const PricingPanel = () => {
                 setForm((prev) => ({ ...prev, margin: event.target.value }));
                 setFeedback(null);
               }}
-              className="h-10 w-24"
+              className={cn(
+                "h-10 w-24",
+                !isPercentInputValid(form.margin) && "border-destructive focus-visible:ring-destructive/20",
+              )}
               aria-label="Margem de lucro personalizada"
             />
             <span className="text-xs font-semibold text-muted-foreground">% personalizado</span>
@@ -428,7 +554,7 @@ export const PricingPanel = () => {
         title="Adicional da diária premium"
         description="Quanto acima da diária ideal você cobra em serviços especializados."
       >
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {PREMIUM_PRESETS.map((preset) => (
             <button
               key={preset}
@@ -455,13 +581,26 @@ export const PricingPanel = () => {
                 setForm((prev) => ({ ...prev, premiumExtra: event.target.value }));
                 setFeedback(null);
               }}
-              className="h-10 w-24"
+              className={cn(
+                "h-10 w-24",
+                !isPercentInputValid(form.premiumExtra) &&
+                  "border-destructive focus-visible:ring-destructive/20",
+              )}
               aria-label="Adicional premium personalizado"
             />
             <span className="text-xs font-semibold text-muted-foreground">% personalizado</span>
           </div>
         </div>
       </BlockCard>
+
+      {/* Aviso de percentual inválido */}
+      {invalidPercents.length > 0 ? (
+        <p className="flex items-start gap-2 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <AlertCircle className="mt-0.5 size-4 shrink-0" />
+          Percentual fora da faixa permitida (0% a 100%) em: {invalidPercents.join(", ")}. Corrija para
+          poder salvar.
+        </p>
+      ) : null}
 
       {feedback ? (
         <p
@@ -476,10 +615,28 @@ export const PricingPanel = () => {
         </p>
       ) : null}
 
-      <Button type="button" size="lg" className="w-full sm:w-auto" disabled={saving} onClick={() => void handleSave()}>
-        {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-        Salvar configurações
-      </Button>
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <Button
+          type="button"
+          size="lg"
+          className="w-full sm:w-auto"
+          disabled={saving || invalidPercents.length > 0}
+          onClick={() => void handleSave()}
+        >
+          {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+          Salvar configurações
+        </Button>
+        <Button
+          type="button"
+          variant="light-outline"
+          size="lg"
+          className="w-full sm:w-auto"
+          onClick={handleReset}
+        >
+          <RotateCcw className="size-4" />
+          Restaurar valores padrão
+        </Button>
+      </div>
 
       {/* Simulador de obra */}
       <BlockCard
@@ -510,26 +667,16 @@ export const PricingPanel = () => {
         </p>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {[
-            { key: "days", label: "Número estimado de dias" },
-            { key: "helpers", label: "Quantidade de ajudantes" },
-            { key: "helperRate", label: "Diária de cada ajudante (R$)" },
-            { key: "travel", label: "Deslocamento total (R$)" },
-            { key: "otherCosts", label: "Outros custos diretos (R$)" },
-            { key: "contingency", label: "Percentual de imprevistos (%)" },
-          ].map((field) => (
-            <div key={field.key} className="flex flex-col gap-1.5">
-              <Label htmlFor={`sim-${field.key}`} className="text-xs">
-                {field.label}
-              </Label>
-              <Input
-                id={`sim-${field.key}`}
-                inputMode="decimal"
-                value={sim[field.key as keyof typeof sim]}
-                onChange={(event) => setSim((prev) => ({ ...prev, [field.key]: event.target.value }))}
-                className="h-10"
-              />
-            </div>
+          {SIMULATOR_FIELDS.map((field) => (
+            <FieldInput
+              key={field.key}
+              id={`sim-${field.key}`}
+              label={field.label}
+              kind={field.kind}
+              value={sim[field.key as keyof typeof sim]}
+              invalid={field.kind === "percent" && !isPercentInputValid(sim.contingency)}
+              onChange={(value) => setSim((prev) => ({ ...prev, [field.key]: value }))}
+            />
           ))}
         </div>
 
@@ -559,6 +706,12 @@ export const PricingPanel = () => {
             </span>
           </div>
         </div>
+
+        <p className="rounded-2xl border border-border/70 bg-secondary/40 px-4 py-3 text-xs leading-relaxed text-muted-foreground">
+          O valor sugerido refere-se à mão de obra e aos custos configurados nesta ferramenta. Tintas,
+          massas, seladores e outros materiais principais da obra devem ser considerados separadamente
+          quando aplicável.
+        </p>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="flex flex-1 flex-col gap-1.5">
@@ -638,8 +791,8 @@ export const PricingPanel = () => {
 
       <p className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
         <Calculator className="mt-0.5 size-3.5 shrink-0" />
-        Ferramenta interna de apoio. Os valores são uma referência calculada a partir dos seus
-        números — ajuste conforme sua realidade e o mercado da região.
+        Ferramenta interna de apoio. Os valores são uma referência calculada a partir dos seus números
+        — ajuste conforme sua realidade e o mercado da região.
       </p>
 
       {!userId ? (

@@ -3539,6 +3539,8 @@ export type Database = {
         Row: {
           capacity: Json
           charges: Json
+          charges_percent: Json
+          fixed_reserves: Json
           personal_costs: Json
           premium_extra: number
           professional_costs: Json
@@ -3549,6 +3551,8 @@ export type Database = {
         Insert: {
           capacity?: Json
           charges?: Json
+          charges_percent?: Json
+          fixed_reserves?: Json
           personal_costs?: Json
           premium_extra?: number
           professional_costs?: Json
@@ -3559,6 +3563,8 @@ export type Database = {
         Update: {
           capacity?: Json
           charges?: Json
+          charges_percent?: Json
+          fixed_reserves?: Json
           personal_costs?: Json
           premium_extra?: number
           professional_costs?: Json

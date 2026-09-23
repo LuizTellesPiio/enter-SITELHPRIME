@@ -1,5 +1,8 @@
 /* ------------------------------------------------------------------ */
 /* LH Prime — Diária & Precificação (cálculo puro, sem UI)             */
+/*                                                                     */
+/* Regra central: reservas são VALORES FIXOS em R$; encargos são        */
+/* PERCENTUAIS (0–100%). Os dois nunca se misturam.                    */
 /* ------------------------------------------------------------------ */
 
 export interface FieldDef {
@@ -36,11 +39,19 @@ export const PROFESSIONAL_FIELDS: FieldDef[] = [
   { key: "outros_profissionais", label: "Outros custos profissionais" },
 ];
 
+/** Reservas fixas mensais em R$ (valores, nunca percentuais). */
+export const FIXED_RESERVE_FIELDS: FieldDef[] = [
+  { key: "manutencao_emergencias", label: "Reserva para manutenção/emergências" },
+  { key: "ferramentas_equipamentos", label: "Reserva para ferramentas/equipamentos" },
+  { key: "dias_sem_trabalho", label: "Reserva para dias sem trabalho" },
+  { key: "outros_fundos", label: "Outros fundos de reserva" },
+];
+
+/** Encargos percentuais (%), aplicados sobre custos + reservas fixas. */
 export const CHARGE_FIELDS: FieldDef[] = [
   { key: "impostos", label: "Impostos/taxas" },
   { key: "ferias", label: "Reserva para férias" },
-  { key: "emergencias", label: "Reserva para manutenção/emergências" },
-  { key: "dias_sem_trabalho", label: "Reserva para dias sem trabalho" },
+  { key: "outros_encargos", label: "Outros encargos percentuais" },
 ];
 
 export const CAPACITY_FIELDS: FieldDef[] = [
@@ -55,33 +66,96 @@ export type NumericForm = Record<string, string>;
 export interface PricingForm {
   personal: NumericForm;
   professional: NumericForm;
+  /** R$ — reservas fixas mensais. */
+  fixedReserves: NumericForm;
+  /** % — encargos percentuais. */
   charges: NumericForm;
   capacity: NumericForm;
   margin: string;
   premiumExtra: string;
 }
 
-/** Converte texto (aceita vírgula) em número ≥ 0. */
+export const MAX_PERCENT = 100;
+
+/* ------------------------------- Moeda (R$) ------------------------------ */
+
+/** Permite digitação livre de um valor em R$ (dígitos + separador decimal). */
+export const normalizeCurrencyInput = (raw: string): string => {
+  const cleaned = raw.replace(/[^\d.,]/g, "");
+  const lastComma = cleaned.lastIndexOf(",");
+  if (lastComma >= 0) {
+    const intPart = cleaned.slice(0, lastComma).replace(/[.,]/g, "");
+    const decPart = cleaned.slice(lastComma + 1).replace(/[^\d]/g, "").slice(0, 2);
+    return `${intPart},${decPart}`;
+  }
+  return cleaned.replace(/[^\d]/g, "");
+};
+
+/** Converte número em texto de moeda (ex.: 1200.5 -> "1.200,50"). */
+export const formatCurrencyValue = (value: number): string =>
+  (Number.isFinite(value) ? Math.max(0, value) : 0).toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+/** Formata o campo em R$ ao sair dele (ex.: "500" -> "500,00"). */
+export const formatCurrencyOnBlur = (raw: string): string => {
+  const value = parseCurrency(raw);
+  return value > 0 ? formatCurrencyValue(value) : "";
+};
+
+/** Lê um campo em R$ (aceita "500", "500,50" ou "1.234,56"). */
+export const parseCurrency = (value: string | undefined): number => {
+  if (!value) return 0;
+  const normalized = String(value)
+    .trim()
+    .replace(/\./g, "")
+    .replace(",", ".")
+    .replace(/[^\d.-]/g, "");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+};
+
+/* --------------------------- Números e percentuais ----------------------- */
+
+/** Converte texto simples (aceita vírgula) em número ≥ 0. */
 export const parseNumber = (value: string | undefined): number => {
   if (value === undefined || value === null) return 0;
   const parsed = Number(String(value).trim().replace(",", "."));
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 };
 
+/** Limita percentuais à faixa válida (0–100). */
+export const clampPercent = (value: number): number =>
+  Math.min(MAX_PERCENT, Math.max(0, Number.isFinite(value) ? value : 0));
+
+/** Campo percentual válido: vazio (=0) ou número entre 0 e 100. */
+export const isPercentInputValid = (value: string | undefined): boolean => {
+  const text = String(value ?? "").trim();
+  if (!text) return true;
+  const parsed = Number(text.replace(",", "."));
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= MAX_PERCENT;
+};
+
 const emptyMap = (fields: FieldDef[]): NumericForm =>
   Object.fromEntries(fields.map((field) => [field.key, ""]));
 
+/** Configuração inicial sugerida (o usuário pode alterar tudo depois). */
 export const createDefaultForm = (): PricingForm => ({
   personal: emptyMap(PERSONAL_FIELDS),
   professional: emptyMap(PROFESSIONAL_FIELDS),
-  charges: emptyMap(CHARGE_FIELDS),
+  fixedReserves: {
+    ...emptyMap(FIXED_RESERVE_FIELDS),
+    manutencao_emergencias: formatCurrencyValue(500),
+  },
+  charges: { impostos: "0", ferias: "0", outros_encargos: "0" },
   capacity: {
     dias_uteis: "22",
     dias_trabalhaveis: "22",
     dias_perdidos: "4",
     horas_por_dia: "8",
   },
-  margin: "30",
+  margin: "20",
   premiumExtra: "20",
 });
 
@@ -89,7 +163,10 @@ export interface PricingResult {
   personalTotal: number;
   professionalTotal: number;
   baseCosts: number;
+  fixedReserves: number;
+  baseWithReserves: number;
   chargesPercent: number;
+  chargesValue: number;
   monthlyTotal: number;
   productiveDays: number;
   costPerDay: number;
@@ -99,22 +176,32 @@ export interface PricingResult {
   premiumDaily: number;
 }
 
-const sumFields = (map: NumericForm, fields: FieldDef[]): number =>
-  fields.reduce((acc, field) => acc + parseNumber(map[field.key]), 0);
+const sumCurrency = (map: NumericForm, fields: FieldDef[]): number =>
+  fields.reduce((acc, field) => acc + parseCurrency(map[field.key]), 0);
+
+const sumPercent = (map: NumericForm, fields: FieldDef[]): number =>
+  fields.reduce((acc, field) => acc + clampPercent(parseNumber(map[field.key])), 0);
 
 /**
- * custos_base = pessoais + profissionais
- * custo_total_mensal = custos_base + reservas/encargos (%)
- * custo_dia = custo_total_mensal / dias_produtivos (≥ 1)
- * diaria_minima = custo_dia · diaria_ideal = custo_dia + margem · premium = ideal + adicional
+ * custos_base        = pessoais + profissionais
+ * reservas_fixas     = soma das reservas em R$
+ * base_com_reservas  = custos_base + reservas_fixas
+ * encargos           = base_com_reservas × percentual_total
+ * custo_total_mensal = base_com_reservas + encargos
+ * custo_dia          = custo_total_mensal / dias_produtivos (≥ 1)
+ * mínima = custo_dia · ideal = mínima × (1 + margem) · premium = ideal × (1 + adicional)
  */
 export const calculatePricing = (form: PricingForm): PricingResult => {
-  const personalTotal = sumFields(form.personal, PERSONAL_FIELDS);
-  const professionalTotal = sumFields(form.professional, PROFESSIONAL_FIELDS);
+  const personalTotal = sumCurrency(form.personal, PERSONAL_FIELDS);
+  const professionalTotal = sumCurrency(form.professional, PROFESSIONAL_FIELDS);
   const baseCosts = personalTotal + professionalTotal;
 
-  const chargesPercent = sumFields(form.charges, CHARGE_FIELDS);
-  const monthlyTotal = baseCosts * (1 + chargesPercent / 100);
+  const fixedReserves = sumCurrency(form.fixedReserves, FIXED_RESERVE_FIELDS);
+  const baseWithReserves = baseCosts + fixedReserves;
+
+  const chargesPercent = sumPercent(form.charges, CHARGE_FIELDS);
+  const chargesValue = baseWithReserves * (chargesPercent / 100);
+  const monthlyTotal = baseWithReserves + chargesValue;
 
   const workable = parseNumber(form.capacity.dias_trabalhaveis);
   const lost = parseNumber(form.capacity.dias_perdidos);
@@ -124,14 +211,17 @@ export const calculatePricing = (form: PricingForm): PricingResult => {
   const costPerDay = monthlyTotal / productiveDays;
   const costPerHour = costPerDay / hoursPerDay;
   const minimumDaily = costPerDay;
-  const idealDaily = costPerDay * (1 + parseNumber(form.margin) / 100);
-  const premiumDaily = idealDaily * (1 + parseNumber(form.premiumExtra) / 100);
+  const idealDaily = minimumDaily * (1 + clampPercent(parseNumber(form.margin)) / 100);
+  const premiumDaily = idealDaily * (1 + clampPercent(parseNumber(form.premiumExtra)) / 100);
 
   return {
     personalTotal,
     professionalTotal,
     baseCosts,
+    fixedReserves,
+    baseWithReserves,
     chargesPercent,
+    chargesValue,
     monthlyTotal,
     productiveDays,
     costPerDay,
@@ -174,7 +264,7 @@ export const calculateSimulation = (input: SimulationInput): SimulationResult =>
   const helpersCost = days * Math.max(0, input.helpers) * Math.max(0, input.helperRate);
   const extras = Math.max(0, input.travel) + Math.max(0, input.otherCosts);
   const subtotal = labor + helpersCost + extras;
-  const contingencyValue = subtotal * (Math.max(0, input.contingency) / 100);
+  const contingencyValue = subtotal * (clampPercent(input.contingency) / 100);
 
   return {
     labor,
