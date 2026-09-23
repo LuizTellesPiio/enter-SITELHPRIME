@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { parseCurrency, parseNumber } from "./pricing-calc";
 import {
   formatPackageLabel,
+  type MaterialAreaMode,
   type MaterialRecord,
   type ServiceMaterialRow,
 } from "./pricing-materials";
@@ -28,7 +29,7 @@ export const loadServiceMaterials = async (
   const { data, error } = await supabase
     .from("pricing_service_materials")
     .select(
-      "material_id, yield_m2_per_unit, coats, waste_percent, package_size, price_per_package, manual_packages, sort_order",
+      "material_id, yield_m2_per_unit, coats, waste_percent, package_size, price_per_package, manual_packages, sort_order, supplier, area_mode, area_percent, area_manual",
     )
     .eq("service_key", serviceKey)
     .order("sort_order");
@@ -39,8 +40,8 @@ export const loadServiceMaterials = async (
     const materialId = String(row.material_id ?? "");
     const material = catalog.find((item) => item.id === materialId);
     if (!material) return [];
-    const toText = (value: unknown): string =>
-      value === null || value === undefined ? "" : String(value);
+    const toText = (value: unknown, fallback = ""): string =>
+      value === null || value === undefined || value === "" ? fallback : String(value);
     return [
       {
         material,
@@ -53,6 +54,13 @@ export const loadServiceMaterials = async (
           packageSize: toText(row.package_size),
           pricePerPackage: toText(row.price_per_package),
           manualPackages: toText(row.manual_packages),
+          supplier: row.supplier === "cliente" ? "cliente" : "lh_prime",
+          areaMode:
+            row.area_mode === "percent" || row.area_mode === "manual"
+              ? (row.area_mode as MaterialAreaMode)
+              : "total",
+          areaPercent: toText(row.area_percent, "100") || "100",
+          areaManual: toText(row.area_manual),
         },
       },
     ];
@@ -75,6 +83,10 @@ export const saveServiceMaterials = async (
     package_label: formatPackageLabel(parseNumber(row.config.packageSize), row.material.unit) || null,
     price_per_package: parseCurrency(row.config.pricePerPackage) || null,
     manual_packages: parseNumber(row.config.manualPackages) || null,
+    supplier: row.config.supplier === "cliente" ? "cliente" : "lh_prime",
+    area_mode: row.config.areaMode,
+    area_percent: parseNumber(row.config.areaPercent) || null,
+    area_manual: parseNumber(row.config.areaManual) || null,
     sort_order: index,
     updated_at: new Date().toISOString(),
   }));

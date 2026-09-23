@@ -1,0 +1,35 @@
+-- LH PRIME — Refinamento final do módulo de orçamento.
+-- Somente colunas novas em tabelas que já existem (mesmo módulo/business).
+-- Nada é removido, renomeado ou recriado; dados existentes continuam válidos.
+
+-- 1) Rascunho do orçamento: cliente/obra, escopo, vistoria e dados comerciais.
+alter table public.pricing_settings
+  add column if not exists client jsonb not null default '{}'::jsonb,
+  add column if not exists scope jsonb not null default '{}'::jsonb,
+  add column if not exists survey jsonb not null default '{}'::jsonb,
+  add column if not exists commercial jsonb not null default '{}'::jsonb;
+
+-- 2) Por material do serviço: quem fornece e sobre qual área é aplicado.
+alter table public.pricing_service_materials
+  add column if not exists supplier text,
+  add column if not exists area_mode text,
+  add column if not exists area_percent numeric,
+  add column if not exists area_manual numeric;
+
+-- 3) Orçamentos: motivo de perda e novos status da obra.
+alter table public.pricing_simulations
+  add column if not exists lost_reason text;
+
+-- O check antigo aceitava apenas 'planejado' e 'concluida'. Ele é substituído por
+-- um que também aceita os novos status E mantém os valores antigos válidos, para
+-- que nenhum registro existente deixe de ser lido ou atualizado.
+alter table public.pricing_simulations
+  drop constraint if exists pricing_simulations_status_check;
+
+alter table public.pricing_simulations
+  add constraint pricing_simulations_status_check check (
+    status in (
+      'rascunho', 'orcado', 'aguardando_cliente', 'aprovado', 'em_execucao', 'concluido', 'perdido',
+      'planejado', 'concluida'
+    )
+  );

@@ -1,30 +1,44 @@
-import { AlertCircle, Loader2, Package, Save } from "lucide-react";
+import { AlertCircle, Loader2, Package, Save, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatBRL, formatCurrencyOnBlur, normalizeCurrencyInput } from "@/lib/pricing-calc";
 import {
+  MATERIAL_AREA_MODES,
   PACKAGE_PRESETS,
+  SUPPLIER_OPTIONS,
+  materialArea,
+  supplierLabel,
+  type MaterialAreaMode,
   type MaterialConfig,
   type MaterialEstimate,
   type ServiceMaterialRow,
 } from "@/lib/pricing-materials";
+import {
+  buildPurchaseList,
+  purchaseLineText,
+  type PurchaseList,
+} from "@/lib/pricing-scope";
 import { cn } from "@/lib/utils";
-import { BlockCard, FieldInput } from "./PricingUi";
+import { AlertNote, ChipGroup, FieldInput, SubGroup, SummaryRow } from "./PricingUi";
 
 /* ------------------------------------------------------------------ */
-/* 5. Materiais previstos — estimativa configurável                    */
+/* 6. Materiais — rendimento, área de aplicação, fornecedor e compras   */
 /* ------------------------------------------------------------------ */
 
 const qty = (value: number, unit: string): string =>
   `${value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} ${unit}`;
 
+const num = (value: number, digits = 2): string =>
+  value.toLocaleString("pt-BR", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+
 export const MaterialsBlock = ({
   serviceLabel,
   rows,
   estimates,
-  area,
-  totalCost,
+  totalArea,
+  lhPrimeCost,
+  clientCost,
   saving,
   feedback,
   onRowsChange,
@@ -33,8 +47,9 @@ export const MaterialsBlock = ({
   serviceLabel: string;
   rows: ServiceMaterialRow[];
   estimates: MaterialEstimate[];
-  area: number;
-  totalCost: number;
+  totalArea: number;
+  lhPrimeCost: number;
+  clientCost: number;
   saving: boolean;
   feedback: { type: "success" | "error"; text: string } | null;
   onRowsChange: (rows: ServiceMaterialRow[]) => void;
@@ -48,36 +63,23 @@ export const MaterialsBlock = ({
     );
   };
 
+  const purchase: PurchaseList = buildPurchaseList(
+    rows.map((row, index) => ({
+      material: row.material,
+      estimate: estimates[index],
+      supplier: row.config.supplier,
+    })),
+  );
+
   return (
-    <BlockCard
-      step={5}
-      title="Materiais previstos"
-      description="Configure rendimento, demãos, desperdício e embalagem de cada material. Tudo editável — o que você não configurar aparece como não configurado."
-    >
-      {/* Serviço escolhido no bloco de etapas */}
+    <div className="flex flex-col gap-4">
       <p className="rounded-2xl border border-border/70 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-        Materiais do serviço{" "}
-        <strong className="font-bold text-primary">{serviceLabel}</strong>. Para trocar, use “Serviço
-        e etapas do serviço”.
+        Materiais do serviço <strong className="font-bold text-primary">{serviceLabel}</strong> ·
+        área medida de {num(totalArea)} m². Para trocar o serviço, use a etapa 4.
       </p>
 
-      {/* Área usada */}
-      <p className="rounded-2xl border border-primary/20 bg-secondary/50 px-4 py-3 text-sm text-primary">
-        Área líquida usada nos materiais:{" "}
-        <strong className="font-bold">
-          {area.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m²
-        </strong>
-        {area <= 0 ? (
-          <span className="text-muted-foreground">
-            {" "}
-            — informe as medidas no bloco “Medição por m²” para calcular.
-          </span>
-        ) : null}
-      </p>
-
-      {/* Materiais do serviço */}
       {rows.length === 0 ? (
-        <p className="rounded-2xl border border-border/70 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+        <p className="rounded-2xl border border-border/70 bg-card px-4 py-3 text-sm text-muted-foreground">
           Nenhum material cadastrado para este serviço.
         </p>
       ) : (
@@ -86,20 +88,48 @@ export const MaterialsBlock = ({
             const estimate = estimates[index];
             const unit = row.material.unit;
             const presets = PACKAGE_PRESETS[unit] ?? PACKAGE_PRESETS.L;
+            const areaUsed = materialArea(row.config, totalArea);
+            const isClient = row.config.supplier === "cliente";
 
             return (
               <div
                 key={row.material.id}
-                className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-muted/30 p-4"
+                className={cn(
+                  "flex flex-col gap-3 rounded-2xl border p-4",
+                  isClient ? "border-warning/40 bg-warning/5" : "border-border/70 bg-muted/30",
+                )}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="inline-flex items-center gap-2 font-display text-sm font-bold text-primary">
                     <Package className="size-4" />
                     {row.material.name}
                   </span>
-                  <span className="rounded-full border border-border bg-card px-3 py-1 text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground">
-                    consumo em {unit}
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full border border-border bg-card px-3 py-1 text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground">
+                      consumo em {unit}
+                    </span>
+                    <span
+                      className={cn(
+                        "rounded-full border px-3 py-1 text-[0.65rem] font-bold uppercase tracking-wider",
+                        isClient
+                          ? "border-warning/40 bg-warning/10 text-warning"
+                          : "border-emerald/40 bg-emerald/10 text-emerald",
+                      )}
+                    >
+                      {supplierLabel(row.config.supplier)}
+                    </span>
                   </span>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <span className="text-[0.68rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+                    Responsável pelo fornecimento
+                  </span>
+                  <ChipGroup
+                    options={SUPPLIER_OPTIONS.map((option) => ({ key: option.key, label: option.label }))}
+                    value={row.config.supplier}
+                    onChange={(key) => updateConfig(row.material.id, { supplier: key })}
+                  />
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -146,9 +176,7 @@ export const MaterialsBlock = ({
                         <button
                           key={preset}
                           type="button"
-                          onClick={() =>
-                            updateConfig(row.material.id, { packageSize: String(preset) })
-                          }
+                          onClick={() => updateConfig(row.material.id, { packageSize: String(preset) })}
                           className="rounded-full border border-border bg-card px-2.5 py-1 text-[0.65rem] font-bold text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary"
                         >
                           {preset.toLocaleString("pt-BR")} {unit}
@@ -195,7 +223,43 @@ export const MaterialsBlock = ({
                   />
                 </div>
 
-                {/* Resultado do material */}
+                <div className="flex flex-col gap-2">
+                  <span className="text-[0.68rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+                    Área de aplicação deste material
+                  </span>
+                  <ChipGroup
+                    options={MATERIAL_AREA_MODES.map((mode) => ({ key: mode.key, label: mode.label }))}
+                    value={row.config.areaMode}
+                    onChange={(key) =>
+                      updateConfig(row.material.id, { areaMode: key as MaterialAreaMode })
+                    }
+                  />
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {row.config.areaMode === "percent" ? (
+                      <FieldInput
+                        id={`mat-area-percent-${row.material.id}`}
+                        label="Percentual da área"
+                        kind="percent"
+                        value={row.config.areaPercent}
+                        onChange={(value) => updateConfig(row.material.id, { areaPercent: value })}
+                      />
+                    ) : null}
+                    {row.config.areaMode === "manual" ? (
+                      <FieldInput
+                        id={`mat-area-manual-${row.material.id}`}
+                        label="Área em m²"
+                        kind="plain"
+                        value={row.config.areaManual}
+                        onChange={(value) => updateConfig(row.material.id, { areaManual: value })}
+                      />
+                    ) : null}
+                  </div>
+                  <p className="text-xs font-semibold text-primary">
+                    Área usada no cálculo: {num(areaUsed)} m²
+                    {totalArea > 0 ? ` (${num((areaUsed / totalArea) * 100, 1)}% da área total)` : ""}
+                  </p>
+                </div>
+
                 <div className="flex flex-col gap-1 rounded-xl border border-border/70 bg-card px-3 py-2.5 text-xs">
                   {estimate?.configured ? (
                     <>
@@ -213,13 +277,15 @@ export const MaterialsBlock = ({
                       </span>
                       <span className="text-muted-foreground">
                         Sobra aproximada:{" "}
-                        <strong className="font-semibold text-primary">
-                          {qty(estimate.surplus, unit)}
-                        </strong>
+                        <strong className="font-semibold text-primary">{qty(estimate.surplus, unit)}</strong>
                         {" · "}Custo do material:{" "}
-                        <strong className="font-semibold text-emerald">
-                          {formatBRL(estimate.cost)}
-                        </strong>
+                        <strong className="font-semibold text-emerald">{formatBRL(estimate.cost)}</strong>
+                        {isClient ? (
+                          <span className="text-warning">
+                            {" "}
+                            — por conta do cliente, fora do valor da LH Prime
+                          </span>
+                        ) : null}
                       </span>
                     </>
                   ) : (
@@ -244,23 +310,54 @@ export const MaterialsBlock = ({
         </div>
       )}
 
-      {/* Total */}
-      <div className="flex items-center justify-between gap-3 rounded-2xl border border-emerald/30 bg-emerald/10 px-4 py-3">
-        <span className="text-sm font-bold text-primary">Custo estimado dos materiais</span>
-        <span className="font-display text-lg font-extrabold text-emerald">{formatBRL(totalCost)}</span>
+      <SubGroup title="Lista estimada de materiais" hint="Resumo interno — sem integração com fornecedores">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="flex flex-col gap-2 rounded-2xl border border-emerald/30 bg-emerald/5 p-4">
+            <span className="inline-flex items-center gap-2 text-[0.68rem] font-bold uppercase tracking-[0.14em] text-emerald">
+              <ShoppingCart className="size-3.5" />
+              Comprar pela LH Prime
+            </span>
+            {purchase.lhPrime.length === 0 ? (
+              <span className="text-sm text-muted-foreground">Nada a comprar pela LH Prime.</span>
+            ) : (
+              <ul className="flex flex-col gap-1 text-sm text-primary">
+                {purchase.lhPrime.map((line) => (
+                  <li key={line.materialId}>
+                    {purchaseLineText(line)} · {formatBRL(line.cost)}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="flex flex-col gap-2 rounded-2xl border border-warning/40 bg-warning/5 p-4">
+            <span className="inline-flex items-center gap-2 text-[0.68rem] font-bold uppercase tracking-[0.14em] text-warning">
+              <ShoppingCart className="size-3.5" />
+              Material por conta do cliente
+            </span>
+            {purchase.client.length === 0 ? (
+              <span className="text-sm text-muted-foreground">Nenhum material do cliente.</span>
+            ) : (
+              <ul className="flex flex-col gap-1 text-sm text-primary">
+                {purchase.client.map((line) => (
+                  <li key={line.materialId}>{purchaseLineText(line)}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </SubGroup>
+
+      <div className="flex flex-col gap-2 rounded-2xl border border-emerald/30 bg-emerald/10 p-4 text-sm">
+        <SummaryRow label="Custo dos materiais da LH Prime" value={formatBRL(lhPrimeCost)} emphasis />
+        <SummaryRow label="Materiais por conta do cliente" value={formatBRL(clientCost)} />
+        <p className="text-[0.7rem] leading-snug text-muted-foreground">
+          O material do cliente continua calculado em quantidade e aparece na lista, mas não entra no
+          valor financeiro da LH Prime.
+        </p>
       </div>
 
       {feedback ? (
-        <p
-          className={cn(
-            "rounded-2xl border px-4 py-3 text-sm",
-            feedback.type === "error"
-              ? "border-destructive/30 bg-destructive/10 text-destructive"
-              : "border-emerald/30 bg-emerald/10 text-emerald",
-          )}
-        >
-          {feedback.text}
-        </p>
+        <AlertNote tone={feedback.type === "error" ? "danger" : "success"}>{feedback.text}</AlertNote>
       ) : null}
 
       <Button
@@ -273,6 +370,6 @@ export const MaterialsBlock = ({
         {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
         Salvar materiais deste serviço
       </Button>
-    </BlockCard>
+    </div>
   );
 };

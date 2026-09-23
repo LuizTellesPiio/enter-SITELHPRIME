@@ -1,13 +1,10 @@
 import { useState } from "react";
 import { Loader2, Package, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  formatCurrencyValue,
-  parseCurrency,
-  parseNumber,
-} from "@/lib/pricing-calc";
+import { formatCurrencyValue, parseCurrency, parseNumber } from "@/lib/pricing-calc";
 import {
   SURPLUS_DESTINATIONS,
   createRealMaterialRows,
@@ -17,10 +14,10 @@ import {
   type PlannedSnapshot,
   type RealMaterialRow,
 } from "@/lib/pricing-quote";
-import { AlertNote, DataCard, FieldInput, SummaryRow } from "./PricingUi";
+import { AlertNote, DataCard, FieldInput, SubGroup, SummaryRow } from "./PricingUi";
 
 /* ------------------------------------------------------------------ */
-/* 8. Fechar obra — o realizado, para comparar com o planejado          */
+/* 9b. Fechar obra — o realizado, para comparar com o planejado         */
 /* ------------------------------------------------------------------ */
 
 const num = (value: number, digits = 2): string =>
@@ -37,15 +34,23 @@ export const CloseObraForm = ({
   onSubmit: (actual: ActualSnapshot) => void;
   onCancel: () => void;
 }) => {
-  const [days, setDays] = useState(planned.days > 0 ? String(planned.days) : "");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [days, setDays] = useState(planned.schedule.plannedDays > 0 ? String(planned.schedule.plannedDays) : "");
   const [area, setArea] = useState(planned.area > 0 ? String(planned.area) : "");
   const [helpers, setHelpers] = useState(String(planned.team.helpers));
   const [helperRate, setHelperRate] = useState(
-    planned.helperRate > 0 ? formatCurrencyValue(planned.helperRate) : "",
+    planned.cost.helpers > 0 && planned.schedule.plannedDays > 0 && planned.team.helpers > 0
+      ? formatCurrencyValue(
+          planned.cost.helpers / (planned.schedule.plannedDays * planned.team.helpers),
+        )
+      : "",
   );
-  const [extras, setExtras] = useState(planned.extras > 0 ? formatCurrencyValue(planned.extras) : "");
+  const [extras, setExtras] = useState(
+    planned.cost.extras > 0 ? formatCurrencyValue(planned.cost.extras) : "",
+  );
   const [finalPrice, setFinalPrice] = useState(
-    planned.finalPrice > 0 ? formatCurrencyValue(planned.finalPrice) : "",
+    planned.presentedPrice > 0 ? formatCurrencyValue(planned.presentedPrice) : "",
   );
   const [notes, setNotes] = useState("");
   const [materials, setMaterials] = useState<RealMaterialRow[]>(() =>
@@ -61,9 +66,13 @@ export const CloseObraForm = ({
   const realDays = parseNumber(days);
   const realArea = parseNumber(area);
   const realProductivity = realDays > 0 ? realArea / realDays : 0;
+  const laborPerDay =
+    planned.schedule.plannedDays > 0 ? planned.cost.labor / planned.schedule.plannedDays : 0;
 
   const handleSubmit = () =>
     onSubmit({
+      startDate,
+      endDate,
       days: realDays,
       area: realArea,
       helpers: Math.max(0, Math.floor(parseNumber(helpers))),
@@ -82,76 +91,96 @@ export const CloseObraForm = ({
         Fechar obra — o que aconteceu de verdade
       </span>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <FieldInput
-          id="real-days"
-          label="Dias realmente trabalhados"
-          kind="plain"
-          value={days}
-          onChange={setDays}
-        />
-        <FieldInput
-          id="real-area"
-          label="Área realmente executada (m²)"
-          kind="plain"
-          value={area}
-          onChange={setArea}
-        />
-        <FieldInput
-          id="real-helpers"
-          label="Ajudantes que trabalharam"
-          kind="plain"
-          value={helpers}
-          onChange={setHelpers}
-        />
-        <FieldInput
-          id="real-helper-rate"
-          label="Diária de cada ajudante"
-          kind="currency"
-          value={helperRate}
-          onChange={setHelperRate}
-        />
-        <FieldInput
-          id="real-extras"
-          label="Custos extras reais"
-          kind="currency"
-          value={extras}
-          onChange={setExtras}
-        />
-        <FieldInput
-          id="real-final-price"
-          label="Valor final recebido"
-          kind="currency"
-          value={finalPrice}
-          onChange={setFinalPrice}
-        />
-      </div>
+      <SubGroup title="Datas e execução">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="real-start" className="text-xs">
+              Data de início
+            </Label>
+            <Input
+              id="real-start"
+              type="date"
+              value={startDate}
+              onChange={(event) => setStartDate(event.target.value)}
+              className="h-10"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="real-end" className="text-xs">
+              Data de conclusão
+            </Label>
+            <Input
+              id="real-end"
+              type="date"
+              value={endDate}
+              onChange={(event) => setEndDate(event.target.value)}
+              className="h-10"
+            />
+          </div>
+          <FieldInput
+            id="real-days"
+            label="Dias realmente trabalhados"
+            kind="plain"
+            value={days}
+            onChange={setDays}
+          />
+          <FieldInput
+            id="real-area"
+            label="Área realmente executada (m²)"
+            kind="plain"
+            value={area}
+            onChange={setArea}
+          />
+          <FieldInput
+            id="real-helpers"
+            label="Ajudantes que trabalharam"
+            kind="plain"
+            value={helpers}
+            onChange={setHelpers}
+          />
+          <FieldInput
+            id="real-helper-rate"
+            label="Diária de cada ajudante"
+            kind="currency"
+            value={helperRate}
+            onChange={setHelperRate}
+          />
+          <FieldInput
+            id="real-extras"
+            label="Custos adicionais reais"
+            kind="currency"
+            value={extras}
+            onChange={setExtras}
+          />
+          <FieldInput
+            id="real-final-price"
+            label="Preço final recebido"
+            kind="currency"
+            value={finalPrice}
+            onChange={setFinalPrice}
+          />
+        </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <DataCard
-          label="Produtividade real"
-          value={realProductivity > 0 ? `${num(realProductivity)} m²/dia` : "informe dias e área"}
-          hint={`Previsto: ${num(planned.productivityTeam)} m²/dia`}
-        />
-        <DataCard
-          label="Materiais usados"
-          value={`R$ ${formatCurrencyValue(realMaterialsCost)}`}
-          hint={`Previsto: R$ ${formatCurrencyValue(planned.materialsCost)}`}
-        />
-        <DataCard
-          label="Diferença de dias"
-          value={realDays > 0 ? `${num(realDays - planned.days, 0)} dia(s)` : "—"}
-          hint={`Previsto: ${num(planned.days, 0)} dia(s)`}
-        />
-      </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <DataCard
+            label="Produtividade real"
+            value={realProductivity > 0 ? `${num(realProductivity)} m²/dia` : "informe dias e área"}
+            hint={`Previsto: ${num(planned.productivity.team)} m²/dia`}
+          />
+          <DataCard
+            label="Materiais usados"
+            value={`R$ ${formatCurrencyValue(realMaterialsCost)}`}
+            hint={`Previsto (LH Prime): R$ ${formatCurrencyValue(planned.materialsCost)}`}
+          />
+          <DataCard
+            label="Prazo"
+            value={realDays > 0 ? `${num(realDays, 0)} dia(s)` : "—"}
+            hint={`Previsto: ${planned.schedule.commercialDays} dia(s) ao cliente`}
+          />
+        </div>
+      </SubGroup>
 
-      {/* Materiais previsto x real */}
-      <div className="flex flex-col gap-3">
-        <span className="inline-flex items-center gap-2 text-[0.68rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-          <Package className="size-3.5" />
-          Materiais: previsto x real
-        </span>
-
+      <SubGroup title="Materiais: previsto x real" hint="sem controle de estoque nesta fase">
         {materials.length === 0 ? (
           <p className="rounded-2xl border border-border/70 bg-card px-4 py-3 text-sm text-muted-foreground">
             Este orçamento não tem materiais previstos salvos.
@@ -164,7 +193,10 @@ export const CloseObraForm = ({
                 className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card p-4"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-display text-sm font-bold text-primary">{row.name}</span>
+                  <span className="inline-flex items-center gap-2 font-display text-sm font-bold text-primary">
+                    <Package className="size-4" />
+                    {row.name}
+                  </span>
                   <span className="rounded-full border border-border bg-muted/40 px-3 py-1 text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground">
                     unidade: {row.unit}
                   </span>
@@ -218,18 +250,17 @@ export const CloseObraForm = ({
 
                 <p className="text-xs font-semibold text-primary">
                   Sobra: {num(materialSurplus(row))} {row.unit}
-                  {row.destination ? ` · destino: ${SURPLUS_DESTINATIONS.find((option) => option.key === row.destination)?.label}` : " · defina o destino"}
+                  {row.destination
+                    ? ` · destino: ${SURPLUS_DESTINATIONS.find((option) => option.key === row.destination)?.label}`
+                    : " · defina o destino"}
                 </p>
               </div>
             ))}
           </div>
         )}
-      </div>
+      </SubGroup>
 
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="real-notes" className="text-xs">
-          Observações da obra (opcional)
-        </Label>
+      <SubGroup title="Observações da obra">
         <Textarea
           id="real-notes"
           value={notes}
@@ -237,21 +268,21 @@ export const CloseObraForm = ({
           placeholder="Ex.: chuva atrapalhou dois dias, cliente pediu uma parede extra..."
           className="min-h-20"
         />
-      </div>
+      </SubGroup>
 
       <div className="flex flex-col gap-2 rounded-2xl border border-border/70 bg-card p-4 text-sm">
-        <SummaryRow label="Valor final recebido" value={`R$ ${formatCurrencyValue(parseCurrency(finalPrice))}`} />
+        <SummaryRow label="Preço final recebido" value={`R$ ${formatCurrencyValue(parseCurrency(finalPrice))}`} />
         <SummaryRow label="Materiais usados" value={`R$ ${formatCurrencyValue(realMaterialsCost)}`} />
         <SummaryRow
-          label="Custo de mão de obra real"
-          value={`R$ ${formatCurrencyValue(realDays * planned.costPerDay)}`}
+          label={`Custo de mão de obra real (${num(realDays, 0)} dia(s) × R$ ${formatCurrencyValue(laborPerDay)})`}
+          value={`R$ ${formatCurrencyValue(realDays * laborPerDay)}`}
           emphasis
         />
       </div>
 
       <AlertNote tone="info">
-        Ao concluir, o orçamento passa a contar nas médias reais por serviço e continua guardado no
-        histórico com o planejado e o realizado lado a lado.
+        Ao concluir, a obra passa a contar nas médias reais por serviço e continua no histórico com o
+        planejado e o realizado lado a lado.
       </AlertNote>
 
       <div className="flex flex-col gap-3 sm:flex-row">

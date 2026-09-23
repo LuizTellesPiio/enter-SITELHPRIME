@@ -298,3 +298,35 @@ export const ResultCard = ({
     <span className="text-[0.7rem] leading-snug text-muted-foreground">{hint}</span>
   </div>
 );
+
+/** Subgrupo dentro de uma etapa recolhível (sem card aninhado pesado). */
+export const SubGroup = ({
+  title,
+  hint,
+  children,
+}: {
+  title?: string;
+  hint?: string;
+  children: React.ReactNode;
+}) => (
+  <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-muted/30 p-4">
+    {title ? (
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <span className="text-[0.68rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+          {title}
+        </span>
+        {hint ? <span className="text-[0.7rem] text-muted-foreground">{hint}</span> : null}
+      </div>
+    ) : null}
+    {children}
+  </div>
+);
+
+/** Lista simples de rótulo/valor em coluna. */
+export const InfoList = ({ items }: { items: { label: string; value: string }[] }) => (
+  <div className="flex flex-col gap-2">
+    {items.map((item) => (
+      <SummaryRow key={item.label} label={item.label} value={item.value} />
+    ))}
+  </div>
+);

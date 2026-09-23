@@ -3564,6 +3564,9 @@ export type Database = {
       }
       pricing_service_materials: {
         Row: {
+          area_manual: number | null
+          area_mode: string | null
+          area_percent: number | null
           coats: number | null
           id: string
           manual_packages: number | null
@@ -3573,11 +3576,15 @@ export type Database = {
           price_per_package: number | null
           service_key: string
           sort_order: number
+          supplier: string | null
           updated_at: string
           waste_percent: number | null
           yield_m2_per_unit: number | null
         }
         Insert: {
+          area_manual?: number | null
+          area_mode?: string | null
+          area_percent?: number | null
           coats?: number | null
           id?: string
           manual_packages?: number | null
@@ -3587,11 +3594,15 @@ export type Database = {
           price_per_package?: number | null
           service_key: string
           sort_order?: number
+          supplier?: string | null
           updated_at?: string
           waste_percent?: number | null
           yield_m2_per_unit?: number | null
         }
         Update: {
+          area_manual?: number | null
+          area_mode?: string | null
+          area_percent?: number | null
           coats?: number | null
           id?: string
           manual_packages?: number | null
@@ -3601,6 +3612,7 @@ export type Database = {
           price_per_package?: number | null
           service_key?: string
           sort_order?: number
+          supplier?: string | null
           updated_at?: string
           waste_percent?: number | null
           yield_m2_per_unit?: number | null
@@ -3619,6 +3631,8 @@ export type Database = {
           capacity: Json
           charges: Json
           charges_percent: Json
+          client: Json
+          commercial: Json
           diagnosis: Json
           fixed_reserves: Json
           m2_per_day: number | null
@@ -3628,9 +3642,11 @@ export type Database = {
           premium_extra: number
           professional_costs: Json
           profit_margin: number
+          scope: Json
           service_profile: string | null
           service_steps: Json
           surfaces: Json
+          survey: Json
           team: Json
           updated_at: string
           user_id: string
@@ -3639,6 +3655,8 @@ export type Database = {
           capacity?: Json
           charges?: Json
           charges_percent?: Json
+          client?: Json
+          commercial?: Json
           diagnosis?: Json
           fixed_reserves?: Json
           m2_per_day?: number | null
@@ -3648,9 +3666,11 @@ export type Database = {
           premium_extra?: number
           professional_costs?: Json
           profit_margin?: number
+          scope?: Json
           service_profile?: string | null
           service_steps?: Json
           surfaces?: Json
+          survey?: Json
           team?: Json
           updated_at?: string
           user_id: string
@@ -3659,6 +3679,8 @@ export type Database = {
           capacity?: Json
           charges?: Json
           charges_percent?: Json
+          client?: Json
+          commercial?: Json
           diagnosis?: Json
           fixed_reserves?: Json
           m2_per_day?: number | null
@@ -3668,9 +3690,11 @@ export type Database = {
           premium_extra?: number
           professional_costs?: Json
           profit_margin?: number
+          scope?: Json
           service_profile?: string | null
           service_steps?: Json
           surfaces?: Json
+          survey?: Json
           team?: Json
           updated_at?: string
           user_id?: string
@@ -3686,6 +3710,7 @@ export type Database = {
           daily_rate: number
           days: number
           id: string
+          lost_reason: string | null
           planned: Json | null
           reference: string
           service_key: string | null
@@ -3701,6 +3726,7 @@ export type Database = {
           daily_rate?: number
           days?: number
           id?: string
+          lost_reason?: string | null
           planned?: Json | null
           reference?: string
           service_key?: string | null
@@ -3716,6 +3742,7 @@ export type Database = {
           daily_rate?: number
           days?: number
           id?: string
+          lost_reason?: string | null
           planned?: Json | null
           reference?: string
           service_key?: string | null

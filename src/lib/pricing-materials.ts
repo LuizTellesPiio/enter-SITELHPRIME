@@ -66,6 +66,25 @@ export const totalNetArea = (rows: SurfaceRow[]): number =>
 
 /* -------------------------- Configuração de material --------------------- */
 
+/** Quem fornece o material (decidido pelo admin em cada orçamento). */
+export type SupplierKey = "lh_prime" | "cliente";
+
+export const SUPPLIER_OPTIONS = [
+  { key: "lh_prime", label: "LH Prime" },
+  { key: "cliente", label: "Cliente" },
+] as const;
+
+export const supplierLabel = (key: string): string =>
+  key === "cliente" ? "Cliente" : "LH Prime";
+
+export type MaterialAreaMode = "total" | "percent" | "manual";
+
+export const MATERIAL_AREA_MODES = [
+  { key: "total", label: "Área total" },
+  { key: "percent", label: "Percentual da área" },
+  { key: "manual", label: "m² manual" },
+] as const;
+
 export interface MaterialConfig {
   materialId: string;
   /** rendimento em m² por unidade de consumo (L/kg/un) */
@@ -76,6 +95,12 @@ export interface MaterialConfig {
   pricePerPackage: string;
   /** ajuste manual das embalagens (vazio = cálculo automático) */
   manualPackages: string;
+  /** quem fornece (LH Prime ou cliente) */
+  supplier: string;
+  /** área sobre a qual o material é aplicado */
+  areaMode: MaterialAreaMode;
+  areaPercent: string;
+  areaManual: string;
 }
 
 export const emptyMaterialConfig = (materialId: string): MaterialConfig => ({
@@ -86,7 +111,24 @@ export const emptyMaterialConfig = (materialId: string): MaterialConfig => ({
   packageSize: "",
   pricePerPackage: "",
   manualPackages: "",
+  supplier: "lh_prime",
+  areaMode: "total",
+  areaPercent: "100",
+  areaManual: "",
 });
+
+/** Área de aplicação do material, conforme o modo escolhido. */
+export const materialArea = (config: MaterialConfig, totalArea: number): number => {
+  const area = Math.max(0, totalArea);
+  if (config.areaMode === "percent") {
+    const percent = Math.min(100, Math.max(0, parseNumber(config.areaPercent)));
+    return area * (percent / 100);
+  }
+  if (config.areaMode === "manual") return Math.max(0, parseNumber(config.areaManual));
+  return area;
+};
+
+export const isClientSupplied = (config: MaterialConfig): boolean => config.supplier === "cliente";
 
 /** Tamanhos de embalagem sugeridos por unidade de consumo (editáveis). */
 export const PACKAGE_PRESETS: Record<string, number[]> = {
@@ -161,6 +203,27 @@ export const estimateMaterial = (
 
 export const totalMaterialsCost = (estimates: MaterialEstimate[]): number =>
   estimates.reduce((acc, item) => acc + item.cost, 0);
+
+/**
+ * Custo dos materiais que ficam por conta da LH Prime.
+ * Material fornecido pelo cliente continua calculado em quantidade,
+ * mas não entra no valor financeiro da LH Prime.
+ */
+export const lhPrimeMaterialsCost = (
+  items: { estimate: MaterialEstimate; config: MaterialConfig }[],
+): number =>
+  items.reduce(
+    (acc, item) => acc + (isClientSupplied(item.config) ? 0 : item.estimate.cost),
+    0,
+  );
+
+export const clientMaterialsCost = (
+  items: { estimate: MaterialEstimate; config: MaterialConfig }[],
+): number =>
+  items.reduce(
+    (acc, item) => acc + (isClientSupplied(item.config) ? item.estimate.cost : 0),
+    0,
+  );
 
 /** Material do serviço + sua configuração (rendimento, demãos, embalagem...). */
 export interface ServiceMaterialRow {

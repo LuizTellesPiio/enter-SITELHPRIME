@@ -249,6 +249,8 @@ export interface ObraInput {
   contingency: number;
   /** custo estimado dos materiais */
   materialsCost: number;
+  /** valor dos itens extras do escopo (portas, rodapés, diárias...) */
+  itemsPrice?: number;
   dailyRates: { minimum: number; ideal: number; premium: number };
   /** valor mínimo de mobilização em R$ (opcional) */
   mobilizationMinimum?: number;
@@ -262,6 +264,8 @@ export interface ObraBreakdown {
   mobilizationApplied: boolean;
   helpers: number;
   materials: number;
+  /** valor dos itens extras do escopo */
+  items: number;
   extras: number;
   contingency: number;
   total: number;
@@ -278,13 +282,14 @@ export interface ObraResult {
  *   mão_de_obra = dias × diária
  *   mobilização = se a mão de obra ficar abaixo do mínimo, usa o mínimo
  *                 (os materiais continuam sendo somados normalmente)
- *   subtotal    = mão_de_obra + ajudantes + materiais + custos_extras
+ *   subtotal    = mão_de_obra + ajudantes + materiais + itens + custos_extras
  *   total       = subtotal + imprevistos%
  */
 export const calculateObra = (input: ObraInput): ObraResult => {
   const days = Math.max(0, input.days);
   const helpers = days * Math.max(0, input.helpers) * Math.max(0, input.helperRate);
   const materials = Math.max(0, input.materialsCost);
+  const items = Math.max(0, input.itemsPrice ?? 0);
   const extras = Math.max(0, input.travel) + Math.max(0, input.otherCosts);
   const contingencyPercent = clampPercent(input.contingency);
   const mobilizationMinimum = Math.max(0, input.mobilizationMinimum ?? 0);
@@ -293,7 +298,7 @@ export const calculateObra = (input: ObraInput): ObraResult => {
     const laborBeforeMinimum = days * Math.max(0, daily);
     const mobilizationApplied = mobilizationMinimum > 0 && laborBeforeMinimum < mobilizationMinimum;
     const labor = mobilizationApplied ? mobilizationMinimum : laborBeforeMinimum;
-    const subtotal = labor + helpers + materials + extras;
+    const subtotal = labor + helpers + materials + items + extras;
     const contingency = subtotal * (contingencyPercent / 100);
     return {
       labor,
@@ -301,6 +306,7 @@ export const calculateObra = (input: ObraInput): ObraResult => {
       mobilizationApplied,
       helpers,
       materials,
+      items,
       extras,
       contingency,
       total: subtotal + contingency,

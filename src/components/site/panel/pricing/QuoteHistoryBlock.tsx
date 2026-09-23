@@ -1,31 +1,52 @@
 import { useState } from "react";
-import { ChevronDown, ChevronUp, ClipboardCheck, History, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, ClipboardCheck, Copy, History, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { formatBRL } from "@/lib/pricing-calc";
-import type { QuoteRecord } from "@/lib/pricing-api";
+import {
+  LOST_REASONS,
+  QUOTE_STATUSES,
+  isConcluded,
+  lostReasonLabel,
+  normalizeStatus,
+  statusLabel,
+  type QuoteRecord,
+  type QuoteStatus,
+} from "@/lib/pricing-api";
 import type { ActualSnapshot } from "@/lib/pricing-quote";
 import { cn } from "@/lib/utils";
-import { AlertNote, BlockCard } from "./PricingUi";
+import { AlertNote, SubGroup } from "./PricingUi";
 import { CloseObraForm } from "./CloseObraForm";
 import { RealizedSummary } from "./RealizedSummary";
 
 /* ------------------------------------------------------------------ */
-/* Histórico de orçamentos + fechamento da obra                         */
+/* 9. Planejado x realizado — histórico, status e fechamento da obra    */
 /* ------------------------------------------------------------------ */
 
 const num = (value: number, digits = 2): string =>
   value.toLocaleString("pt-BR", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
-const StatusBadge = ({ status }: { status: QuoteRecord["status"] }) => (
+const StatusBadge = ({ status }: { status: QuoteStatus }) => (
   <span
     className={cn(
       "rounded-full border px-3 py-1 text-[0.65rem] font-bold uppercase tracking-wider",
-      status === "concluida"
+      status === "concluido"
         ? "border-emerald/40 bg-emerald/10 text-emerald"
-        : "border-border bg-muted/40 text-muted-foreground",
+        : status === "perdido"
+          ? "border-destructive/40 bg-destructive/10 text-destructive"
+          : status === "aprovado" || status === "em_execucao"
+            ? "border-primary/30 bg-secondary/60 text-primary"
+            : "border-border bg-muted/40 text-muted-foreground",
     )}
   >
-    {status === "concluida" ? "Obra concluída" : "Planejado"}
+    {statusLabel(status)}
   </span>
 );
 
@@ -37,6 +58,8 @@ export const QuoteHistoryBlock = ({
   onToggleClose,
   onClose,
   onDelete,
+  onDuplicate,
+  onStatusChange,
 }: {
   quotes: QuoteRecord[];
   closingId: string | null;
@@ -45,15 +68,13 @@ export const QuoteHistoryBlock = ({
   onToggleClose: (id: string | null) => void;
   onClose: (quote: QuoteRecord, actual: ActualSnapshot) => void;
   onDelete: (id: string) => void;
+  onDuplicate: (quote: QuoteRecord) => void;
+  onStatusChange: (id: string, status: QuoteStatus, lostReason: string | null) => void;
 }) => {
   const [openId, setOpenId] = useState<string | null>(null);
 
   return (
-    <BlockCard
-      step={8}
-      title="Orçamentos salvos, fechamento e planejado x realizado"
-      description="Cada orçamento guarda o planejado. Ao concluir a obra você registra o realizado e vê o que ficou diferente."
-    >
+    <div className="flex flex-col gap-4">
       {feedback ? <AlertNote tone="danger">{feedback}</AlertNote> : null}
 
       {quotes.length === 0 ? (
@@ -66,6 +87,7 @@ export const QuoteHistoryBlock = ({
             const planned = quote.planned;
             const expanded = openId === quote.id;
             const closing = closingId === quote.id;
+            const status = normalizeStatus(quote.status);
 
             return (
               <div
@@ -76,20 +98,27 @@ export const QuoteHistoryBlock = ({
                   <div className="flex min-w-0 flex-col gap-1">
                     <span className="inline-flex flex-wrap items-center gap-2">
                       <span className="truncate font-display text-sm font-bold text-primary">
-                        {quote.reference || "Sem referência"}
+                        {quote.reference || planned?.client?.name || "Sem referência"}
                       </span>
-                      <StatusBadge status={quote.status} />
+                      <StatusBadge status={status} />
                     </span>
                     <span className="text-xs text-muted-foreground">
                       {new Date(quote.created_at).toLocaleDateString("pt-BR")} ·{" "}
                       {planned?.serviceLabel || "serviço não informado"} · {num(quote.days, 0)} dia(s)
                       {quote.area ? ` · ${num(quote.area)} m²` : ""}
+                      {planned?.client?.name ? ` · ${planned.client.name}` : ""}
                     </span>
                     {planned ? (
                       <span className="text-xs text-muted-foreground">
-                        Produtividade prevista: {num(planned.productivityTeam)} m²/dia ·{" "}
+                        Produtividade prevista: {num(planned.productivity.team)} m²/dia ·{" "}
                         {(planned.steps ?? []).length} etapa(s) · materiais{" "}
-                        {formatBRL(planned.materialsCost)}
+                        {formatBRL(planned.materialsCost)} · prazo {planned.schedule.commercialDays}{" "}
+                        dia(s)
+                      </span>
+                    ) : null}
+                    {status === "perdido" && quote.lost_reason ? (
+                      <span className="text-xs text-destructive">
+                        Motivo: {lostReasonLabel(quote.lost_reason)}
                       </span>
                     ) : null}
                   </div>
@@ -109,16 +138,61 @@ export const QuoteHistoryBlock = ({
                   </div>
                 </div>
 
-                {planned && (planned.problems ?? []).length > 0 ? (
-                  <p className="text-xs text-muted-foreground">
-                    Diagnóstico: {planned.environmentLabel} · superfície{" "}
-                    {planned.surfaceStateLabel.toLowerCase()} · {planned.propertyConditionLabel.toLowerCase()} ·
-                    acesso {planned.accessLabel.toLowerCase()} · {(planned.problems ?? []).join(", ")}
-                  </p>
-                ) : null}
+                <SubGroup title="Status da obra">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor={`status-${quote.id}`} className="text-xs">
+                        Situação
+                      </Label>
+                      <Select
+                        value={status}
+                        onValueChange={(value) =>
+                          onStatusChange(quote.id, value as QuoteStatus, quote.lost_reason)
+                        }
+                      >
+                        <SelectTrigger id={`status-${quote.id}`} className="h-10">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {QUOTE_STATUSES.map((item) => (
+                            <SelectItem key={item.key} value={item.key}>
+                              {item.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {status === "perdido" ? (
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor={`lost-${quote.id}`} className="text-xs">
+                          Motivo (opcional)
+                        </Label>
+                        <Select
+                          value={quote.lost_reason || "sem_motivo"}
+                          onValueChange={(value) =>
+                            onStatusChange(quote.id, "perdido", value === "sem_motivo" ? null : value)
+                          }
+                        >
+                          <SelectTrigger id={`lost-${quote.id}`} className="h-10">
+                            <SelectValue placeholder="Sem motivo informado" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="sem_motivo">Sem motivo informado</SelectItem>
+                            {LOST_REASONS.map((item) => (
+                              <SelectItem key={item.key} value={item.key}>
+                                {item.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : null}
+                  </div>
+                </SubGroup>
 
                 <div className="flex flex-wrap gap-2">
-                  {quote.status === "planejado" ? (
+                  {!isConcluded(status) ? (
                     <Button
                       type="button"
                       variant={closing ? "secondary" : "light-outline"}
@@ -130,7 +204,7 @@ export const QuoteHistoryBlock = ({
                     </Button>
                   ) : null}
 
-                  {quote.status === "concluida" && planned && quote.actual ? (
+                  {isConcluded(status) && planned && quote.actual ? (
                     <Button
                       type="button"
                       variant="light-outline"
@@ -142,6 +216,16 @@ export const QuoteHistoryBlock = ({
                       {expanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
                     </Button>
                   ) : null}
+
+                  <Button
+                    type="button"
+                    variant="light-outline"
+                    size="sm"
+                    onClick={() => onDuplicate(quote)}
+                  >
+                    <Copy className="size-4" />
+                    Duplicar
+                  </Button>
                 </div>
 
                 {closing && planned ? (
@@ -161,6 +245,6 @@ export const QuoteHistoryBlock = ({
           })}
         </div>
       )}
-    </BlockCard>
+    </div>
   );
 };

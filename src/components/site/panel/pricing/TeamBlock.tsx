@@ -1,13 +1,19 @@
-import { Gauge, Users } from "lucide-react";
+import { Gauge, Info, Users } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { isPercentInputValid, parseNumber } from "@/lib/pricing-calc";
-import type { ProductivityBreakdown, TeamState } from "@/lib/pricing-diagnosis";
+import { factorText } from "@/lib/pricing-options";
+import {
+  MAX_TEAM_GAIN_PERCENT,
+  teamPreview,
+  type ProductivityBreakdown,
+  type TeamState,
+} from "@/lib/pricing-productivity";
 import { cn } from "@/lib/utils";
-import { AlertNote, BlockCard, FieldInput, SummaryRow } from "./PricingUi";
+import { AlertNote, Chip, FieldInput, SubGroup, SummaryRow } from "./PricingUi";
 
 /* ------------------------------------------------------------------ */
-/* 4. Produtividade e equipe — quanto a obra rende por dia              */
+/* 5. Produtividade e equipe                                            */
 /* ------------------------------------------------------------------ */
 
 const HELPER_GAIN_PRESETS = [15, 25, 40];
@@ -31,58 +37,37 @@ export const TeamBlock = ({
   days: number | null;
 }) => {
   const patch = (values: Partial<TeamState>) => onTeamChange({ ...team, ...values });
-  const helpers = Math.max(0, Math.floor(parseNumber(team.helpers)));
-  const professionals = Math.max(1, Math.floor(parseNumber(team.professionals) || 1));
+  const preview = teamPreview(team, breakdown.adjusted);
+  const gainPercent = parseNumber(team.helperGainPercent);
+  const capped = breakdown.helpers * gainPercent > MAX_TEAM_GAIN_PERCENT;
 
   return (
-    <BlockCard
-      step={4}
-      title="Produtividade e equipe"
-      description="A produtividade base é sua referência de m² por dia. O diagnóstico e as etapas ajustam esse número, e a equipe multiplica o resultado."
-    >
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="m2-per-day" className="text-xs">
-            Produtividade base (m² por dia)
-          </Label>
-          <Input
-            id="m2-per-day"
-            inputMode="decimal"
-            value={m2PerDay}
-            onChange={(event) => onM2PerDayChange(event.target.value)}
-            placeholder="Ex.: 50"
-            className="h-10"
-          />
-          <p className="text-[0.7rem] leading-snug text-muted-foreground">
-            É a sua média real de aplicação em condições ideais. Sem esse valor, informe os dias
-            manualmente em “Custos e preço”.
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="team-professionals" className="text-xs">
-            Profissionais principais (incluindo você)
-          </Label>
-          <Input
-            id="team-professionals"
-            inputMode="numeric"
-            value={team.professionals}
-            onChange={(event) => patch({ professionals: event.target.value })}
-            placeholder="1"
-            className="h-10"
-          />
-          <p className="text-[0.7rem] leading-snug text-muted-foreground">
-            Fica registrado no orçamento para você saber quem executou a obra.
-          </p>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <span className="inline-flex items-center gap-2 text-[0.68rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-          <Users className="size-3.5" />
-          Equipe
-        </span>
+    <div className="flex flex-col gap-4">
+      <SubGroup title="Produtividade base e equipe">
         <div className="grid gap-3 sm:grid-cols-2">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="m2-per-day" className="text-xs">
+              Produtividade base individual (m² por dia)
+            </Label>
+            <Input
+              id="m2-per-day"
+              inputMode="decimal"
+              value={m2PerDay}
+              onChange={(event) => onM2PerDayChange(event.target.value)}
+              placeholder="Ex.: 50"
+              className="h-10"
+            />
+            <p className="text-[0.7rem] leading-snug text-muted-foreground">
+              Sua média real de aplicação em condições ideais, sozinho.
+            </p>
+          </div>
+          <FieldInput
+            id="team-professionals"
+            label="Profissionais principais (incluindo você)"
+            kind="plain"
+            value={team.professionals}
+            onChange={(value) => patch({ professionals: value })}
+          />
           <FieldInput
             id="team-helpers"
             label="Quantidade de ajudantes"
@@ -112,81 +97,115 @@ export const TeamBlock = ({
             </div>
             <div className="flex flex-wrap gap-1.5">
               {HELPER_GAIN_PRESETS.map((preset) => (
-                <button
+                <Chip
                   key={preset}
-                  type="button"
+                  active={parseNumber(team.helperGainPercent) === preset}
                   onClick={() => patch({ helperGainPercent: String(preset) })}
-                  className={cn(
-                    "rounded-full border px-3 py-1 text-[0.65rem] font-bold transition-colors",
-                    parseNumber(team.helperGainPercent) === preset
-                      ? "border-emerald bg-emerald text-emerald-foreground"
-                      : "border-border bg-card text-muted-foreground hover:border-primary/30 hover:text-primary",
-                  )}
                 >
                   +{preset}%
-                </button>
+                </Chip>
               ))}
             </div>
           </div>
         </div>
-        <p className="text-[0.7rem] leading-snug text-muted-foreground">
-          O custo do ajudante continua sendo a diária dele × dias trabalhados, em “Custos e preço”.
-        </p>
-      </div>
 
-      <div className="flex flex-col gap-2 rounded-2xl border border-border/70 bg-muted/30 p-4 text-sm">
-        <span className="inline-flex items-center gap-2 text-[0.68rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+        <AlertNote tone="info">
+          <span className="inline-flex items-start gap-2">
+            <Info className="mt-0.5 size-3.5 shrink-0" />
+            Cada ajudante rende apenas o ganho configurado — mais pessoas não dobram a produção
+            automaticamente. O ganho total é limitado a +{MAX_TEAM_GAIN_PERCENT}%.
+            {capped ? " Nesta configuração o limite já foi atingido." : ""}
+          </span>
+        </AlertNote>
+      </SubGroup>
+
+      <SubGroup title="Como a produtividade foi calculada">
+        <div className="flex flex-col gap-2 text-sm">
+          <SummaryRow
+            label="Produtividade base individual"
+            value={breakdown.base > 0 ? `${num(breakdown.base)} m²/dia` : "não informada"}
+          />
+          <SummaryRow
+            label={`Estado da superfície (−${breakdown.surfaceImpact}%)`}
+            value={`× ${factorText(breakdown.surfaceFactor)}`}
+          />
+          <SummaryRow
+            label={`Condição do imóvel (−${breakdown.propertyImpact}%)`}
+            value={`× ${factorText(breakdown.propertyFactor)}`}
+          />
+          <SummaryRow
+            label={`Acesso (−${breakdown.accessImpact}%)`}
+            value={`× ${factorText(breakdown.accessFactor)}`}
+          />
+          <SummaryRow
+            label={`Altura (−${breakdown.heightImpact}%)`}
+            value={`× ${factorText(breakdown.heightFactor)}`}
+          />
+          <SummaryRow
+            label={`Cores (${breakdown.colors}) (−${breakdown.colorsImpact}%)`}
+            value={`× ${factorText(breakdown.colorsFactor)}`}
+          />
+          <SummaryRow
+            label={`Recortes (−${breakdown.cutsImpact}%)`}
+            value={`× ${factorText(breakdown.cutsFactor)}`}
+          />
+          <SummaryRow
+            label={`Problemas encontrados (−${breakdown.problemsImpact}%)`}
+            value={`× ${factorText(breakdown.problemsFactor)}`}
+          />
+          <SummaryRow
+            label={`Etapas ponderadas (−${breakdown.stepsImpact}%)`}
+            value={`× ${factorText(breakdown.stepsFactor)}`}
+          />
+          <SummaryRow
+            label="Produtividade individual ajustada"
+            value={`${num(breakdown.adjusted)} m²/dia`}
+            emphasis
+          />
+          <SummaryRow
+            label={`Equipe: ${breakdown.professionals} profissional(is) + ${breakdown.helpers} ajudante(s)`}
+            value={`× ${factorText(breakdown.teamFactor)}`}
+          />
+          <SummaryRow
+            label="Produtividade estimada da equipe"
+            value={`${num(breakdown.team)} m²/dia`}
+            emphasis
+          />
+          <SummaryRow
+            label="Dias técnicos para a área medida"
+            value={days !== null ? `${days} dia(s)` : "informe a produtividade base"}
+          />
+        </div>
+      </SubGroup>
+
+      <SubGroup title="Prévia do efeito de cada ajudante">
+        <div className="flex flex-col gap-2 text-sm">
+          {preview.map((row) => (
+            <SummaryRow
+              key={row.helpers}
+              label={`${row.helpers} ajudante(s)`}
+              value={`× ${factorText(row.factor)} → ${num(row.productivity)} m²/dia`}
+            />
+          ))}
+        </div>
+        <p className="inline-flex items-center gap-2 text-[0.7rem] text-muted-foreground">
           <Gauge className="size-3.5" />
-          Como a produtividade foi calculada
-        </span>
-        <SummaryRow
-          label="Produtividade base"
-          value={breakdown.base > 0 ? `${num(breakdown.base)} m²/dia` : "não informada"}
-        />
-        <SummaryRow
-          label={`Estado da superfície (−${breakdown.surfaceImpact}%)`}
-          value={`× ${num(breakdown.surfaceFactor)}`}
-        />
-        <SummaryRow
-          label={`Condição do imóvel (−${breakdown.propertyImpact}%)`}
-          value={`× ${num(breakdown.propertyFactor)}`}
-        />
-        <SummaryRow
-          label={`Acesso (−${breakdown.accessImpact}%)`}
-          value={`× ${num(breakdown.accessFactor)}`}
-        />
-        <SummaryRow
-          label={`Problemas encontrados (−${breakdown.problemsImpact}%)`}
-          value={`× ${num(breakdown.problemsFactor)}`}
-        />
-        <SummaryRow
-          label={`Etapas do serviço (−${breakdown.stepsImpact}%)`}
-          value={`× ${num(breakdown.stepsFactor)}`}
-        />
-        <SummaryRow
-          label="Produtividade ajustada"
-          value={`${num(breakdown.adjusted)} m²/dia`}
-          emphasis
-        />
-        <SummaryRow
-          label={`Equipe: ${professionals} profissional(is) + ${helpers} ajudante(s) (× ${num(
-            breakdown.teamFactor,
-          )})`}
-          value={`${num(breakdown.team)} m²/dia`}
-        />
-        <SummaryRow
-          label="Dias estimados para a área medida"
-          value={days !== null ? `${days} dia(s)` : "informe a produtividade base"}
-          emphasis
-        />
-      </div>
+          Custo do ajudante continua sendo a diária dele × dias trabalhados (etapa 7).
+        </p>
+      </SubGroup>
 
       {breakdown.base <= 0 ? (
         <AlertNote tone="warning">
           Informe a produtividade base (m² por dia) para o sistema calcular os dias automaticamente.
-          Você também pode digitar os dias direto em “Custos e preço”.
+          Você também pode digitar os dias na etapa 7.
         </AlertNote>
       ) : null}
-    </BlockCard>
+
+      <p className="inline-flex items-center gap-2 text-[0.7rem] text-muted-foreground">
+        <Users className="size-3.5" />
+        Profissionais principais ficam registrados no orçamento; só ajudantes alteram produtividade e
+        custo.
+      </p>
+    </div>
   );
 };
