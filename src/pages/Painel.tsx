@@ -1,20 +1,22 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Film, Loader2, LogOut, ShieldAlert, Ticket, Trophy } from "lucide-react";
+import { ArrowLeft, Calculator, Film, Loader2, LogOut, ShieldAlert, Ticket, Trophy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { PainelAuth } from "@/components/site/panel/PainelAuth";
 import { ParticipacoesPanel } from "@/components/site/panel/ParticipacoesPanel";
 import { PremiosPanel } from "@/components/site/panel/PremiosPanel";
 import { PortfolioPanel } from "@/components/site/panel/PortfolioPanel";
+import { PricingPanel } from "@/components/site/panel/PricingPanel";
 import { cn } from "@/lib/utils";
 
-type PanelTab = "participacoes" | "premios" | "portfolio";
+type PanelTab = "participacoes" | "premios" | "portfolio" | "precificacao";
 
 const TABS: { key: PanelTab; label: string; icon: typeof Ticket }[] = [
   { key: "participacoes", label: "Participações", icon: Ticket },
   { key: "premios", label: "Prêmios", icon: Trophy },
   { key: "portfolio", label: "Portfólio", icon: Film },
+  { key: "precificacao", label: "Diária & Precificação", icon: Calculator },
 ];
 
 const Painel = () => {
@@ -177,8 +179,10 @@ const Painel = () => {
           <ParticipacoesPanel />
         ) : tab === "premios" ? (
           <PremiosPanel />
-        ) : (
+        ) : tab === "portfolio" ? (
           <PortfolioPanel />
+        ) : (
+          <PricingPanel />
         )}
       </main>
     </div>

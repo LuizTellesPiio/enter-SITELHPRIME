@@ -75,15 +75,41 @@ export const requestPortfolioUpload = async (
   };
 };
 
+/** Tempo máximo de espera pelo envio dos bytes (evita travar indefinidamente). */
+const UPLOAD_TIMEOUT_MS = 120_000;
+
+const UPLOAD_TIMEOUT_MESSAGE =
+  "O envio demorou mais que o esperado e foi interrompido. Verifique sua conexão e tente novamente.";
+
 /** Envia os bytes do vídeo direto ao Storage usando a URL assinada. */
 export const uploadPortfolioVideo = async (input: {
   path: string;
   token: string;
   file: File;
 }): Promise<{ ok: boolean; message?: string }> => {
-  const { error } = await supabase.storage.uploadToSignedUrl(input.path, input.token, input.file, {
-    contentType: input.file.type || "video/mp4",
+  let timer: number | undefined;
+
+  const timeout = new Promise<never>((_, reject) => {
+    timer = window.setTimeout(() => reject(new Error("upload_timeout")), UPLOAD_TIMEOUT_MS);
   });
-  if (error) return { ok: false, message: error.message };
-  return { ok: true };
+
+  try {
+    const result = await Promise.race([
+      supabase.storage.uploadToSignedUrl(input.path, input.token, input.file, {
+        contentType: input.file.type || "video/mp4",
+      }),
+      timeout,
+    ]);
+
+    if (result.error) return { ok: false, message: result.error.message };
+    return { ok: true };
+  } catch (err) {
+    if (err instanceof Error && err.message === "upload_timeout") {
+      return { ok: false, message: UPLOAD_TIMEOUT_MESSAGE };
+    }
+    console.error("uploadPortfolioVideo: falha no envio", err);
+    return { ok: false, message: "Não foi possível enviar o vídeo. Tente novamente." };
+  } finally {
+    if (timer !== undefined) window.clearTimeout(timer);
+  }
 };

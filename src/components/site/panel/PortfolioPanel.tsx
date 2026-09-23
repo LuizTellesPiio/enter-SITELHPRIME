@@ -82,40 +82,46 @@ export const PortfolioPanel = () => {
     setErrorMessage("");
     setResult(null);
 
-    const prepared = await requestPortfolioUpload({
-      project,
-      kind,
-      file_name: file.name,
-      file_size: file.size,
-      file_type: file.type || "video/mp4",
-    });
+    try {
+      const prepared = await requestPortfolioUpload({
+        project,
+        kind,
+        file_name: file.name,
+        file_size: file.size,
+        file_type: file.type || "video/mp4",
+      });
 
-    if (!prepared.ok || !prepared.token || !prepared.path) {
-      setErrorMessage(prepared.message ?? "Não foi possível preparar o upload.");
+      if (!prepared.ok || !prepared.token || !prepared.path) {
+        setErrorMessage(prepared.message ?? "Não foi possível preparar o upload.");
+        setPhase("error");
+        return;
+      }
+
+      setPhase("uploading");
+      const uploaded = await uploadPortfolioVideo({
+        path: prepared.path,
+        token: prepared.token,
+        file,
+      });
+
+      if (!uploaded.ok) {
+        setErrorMessage(uploaded.message ?? "Falha ao enviar o vídeo. Tente novamente.");
+        setPhase("error");
+        return;
+      }
+
+      setResult({
+        project,
+        label: KIND_LABEL[kind],
+        publicUrl: prepared.publicUrl ?? "",
+      });
+      setFile(null);
+      setPhase("done");
+    } catch (err) {
+      console.error("PortfolioPanel: falha inesperada no upload", err);
+      setErrorMessage("Não foi possível enviar o vídeo agora. Tente novamente.");
       setPhase("error");
-      return;
     }
-
-    setPhase("uploading");
-    const uploaded = await uploadPortfolioVideo({
-      path: prepared.path,
-      token: prepared.token,
-      file,
-    });
-
-    if (!uploaded.ok) {
-      setErrorMessage(uploaded.message ?? "Falha ao enviar o vídeo. Tente novamente.");
-      setPhase("error");
-      return;
-    }
-
-    setResult({
-      project,
-      label: KIND_LABEL[kind],
-      publicUrl: prepared.publicUrl ?? "",
-    });
-    setFile(null);
-    setPhase("done");
   };
 
   const copyUrl = async () => {
