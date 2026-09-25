@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PainelHeader } from "@/components/site/panel/PainelHeader";
 
 type AuthMode = "login" | "signup" | "reset";
 
@@ -126,24 +127,16 @@ export const PainelAuth = () => {
 
   return (
     <div className="flex min-h-full w-full flex-col bg-background">
-      <header className="gradient-ink">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-5 py-6 sm:flex-row sm:items-center sm:justify-between lg:px-8">
-          <div>
-            <p className="text-[0.65rem] font-bold uppercase tracking-[0.24em] text-on-dark-muted">
-              Painel LH Prime
-            </p>
-            <h1 className="font-display text-2xl font-extrabold tracking-tight text-white">
-              Cliente <span className="text-emerald">Premiado</span>
-            </h1>
-          </div>
+      <PainelHeader
+        actions={
           <Button asChild variant="hero-secondary" size="sm" className="w-fit">
             <Link to="/">
               <ArrowLeft className="size-4" />
               Voltar ao site
             </Link>
           </Button>
-        </div>
-      </header>
+        }
+      />
 
       <main className="flex flex-1 items-start justify-center px-5 py-10 lg:px-8">
         <div className="w-full max-w-md rounded-3xl border border-border/70 bg-card p-6 shadow-card sm:p-8">

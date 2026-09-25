@@ -19,6 +19,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { SectionHeader } from "@/components/site/SectionHeader";
+import { BrandLogo } from "@/components/site/BrandLogo";
 import { ImagePlaceholder } from "@/components/site/ImagePlaceholder";
 import { ContactForm } from "@/components/site/ContactForm";
 import { RouletteWheel } from "@/components/site/RouletteWheel";
@@ -29,6 +30,7 @@ import {
   type SpinPhase,
 } from "@/data/campaign";
 import { INSTAGRAM_HANDLE, INSTAGRAM_URL } from "@/data/site";
+import { BRAND } from "@/lib/brand";
 import { spinParticipation, validateParticipation } from "@/lib/campaign-api";
 import { buildWhatsAppLink, WHATSAPP_DISPLAY } from "@/lib/whatsapp";
 
@@ -107,8 +109,8 @@ const STEPS = [
 const CampaignHeader = ({ link }: { link: string }) => (
   <header className="gradient-ink border-b border-white/10">
     <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-5 lg:px-8">
-      <Link to="/" className="font-display text-lg font-bold tracking-tight text-white">
-        LH <span className="text-emerald">Prime</span> Pinturas
+      <Link to="/" className="flex items-center text-white">
+        <BrandLogo variant="full" size="md" />
       </Link>
       <Button asChild variant="hero-secondary" size="sm">
         <a href={link} target="_blank" rel="noreferrer">
@@ -654,8 +656,8 @@ const CampaignFooter = ({ link }: { link: string }) => (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-10 px-5 py-14 lg:px-8">
       <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex flex-col gap-3">
-          <Link to="/" className="font-display text-xl font-bold tracking-tight text-white">
-            LH <span className="text-emerald">Prime</span> Pinturas
+          <Link to="/" className="flex w-fit items-center text-white">
+            <BrandLogo variant="full" size="lg" />
           </Link>
           <p className="max-w-xs text-sm leading-relaxed text-on-dark-muted">
             Pinturas &amp; Acabamentos de Alto Padrão. Da primeira ideia à
@@ -690,7 +692,7 @@ const CampaignFooter = ({ link }: { link: string }) => (
 
       <div className="flex flex-col gap-4 border-t border-white/10 pt-6 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-center text-xs text-on-dark-muted sm:text-left">
-          © {new Date().getFullYear()} LH Prime Pinturas. Todos os direitos
+          © {new Date().getFullYear()} {BRAND.name}. Todos os direitos
           reservados.
         </p>
         <RegulamentoDialog />

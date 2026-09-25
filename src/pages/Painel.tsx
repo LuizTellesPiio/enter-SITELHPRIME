@@ -1,29 +1,33 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Calculator, Film, Loader2, LogOut, ShieldAlert, Ticket, Trophy } from "lucide-react";
+import { ArrowLeft, Loader2, LogOut, ShieldAlert } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { PainelAuth } from "@/components/site/panel/PainelAuth";
+import { PainelHeader } from "@/components/site/panel/PainelHeader";
+import { PanelTabs } from "@/components/site/panel/PanelTabs";
 import { ParticipacoesPanel } from "@/components/site/panel/ParticipacoesPanel";
 import { PremiosPanel } from "@/components/site/panel/PremiosPanel";
 import { PortfolioPanel } from "@/components/site/panel/PortfolioPanel";
 import { PricingPanel } from "@/components/site/panel/PricingPanel";
-import { cn } from "@/lib/utils";
+import {
+  ACTIVE_PANEL_MODULES,
+  CLIENTE_PREMIADO_SECTIONS,
+  type ActivePanelModuleKey,
+  type ClientePremiadoSectionKey,
+} from "@/lib/brand";
 
-type PanelTab = "participacoes" | "premios" | "portfolio" | "precificacao";
-
-const TABS: { key: PanelTab; label: string; icon: typeof Ticket }[] = [
-  { key: "participacoes", label: "Participações", icon: Ticket },
-  { key: "premios", label: "Prêmios", icon: Trophy },
-  { key: "portfolio", label: "Portfólio", icon: Film },
-  { key: "precificacao", label: "Diária & Precificação", icon: Calculator },
-];
+/* Painel — Central de Gestão                                          */
+/* Módulos ativos: Cliente Premiado (Participações + Prêmios),         */
+/* Portfólio e Diária & Precificação. Módulos previstos ficam          */
+/* registrados em `@/lib/brand` sem tela vazia.                        */
 
 const Painel = () => {
   const [ready, setReady] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [access, setAccess] = useState<"loading" | "granted" | "denied">("loading");
-  const [tab, setTab] = useState<PanelTab>("participacoes");
+  const [module, setModule] = useState<ActivePanelModuleKey>("cliente-premiado");
+  const [section, setSection] = useState<ClientePremiadoSectionKey>("participacoes");
 
   const loadRole = useCallback(async (id: string) => {
     const { data } = await supabase.from("profiles").select("role").eq("id", id).maybeSingle();
@@ -88,22 +92,14 @@ const Painel = () => {
   if (access === "denied") {
     return (
       <div className="flex min-h-full w-full flex-col bg-background">
-        <header className="gradient-ink">
-          <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-6 lg:px-8">
-            <div>
-              <p className="text-[0.65rem] font-bold uppercase tracking-[0.24em] text-on-dark-muted">
-                Painel LH Prime
-              </p>
-              <h1 className="font-display text-2xl font-extrabold tracking-tight text-white">
-                Cliente <span className="text-emerald">Premiado</span>
-              </h1>
-            </div>
+        <PainelHeader
+          actions={
             <Button variant="hero-secondary" size="sm" onClick={() => void handleSignOut()}>
               <LogOut className="size-4" />
               Sair
             </Button>
-          </div>
-        </header>
+          }
+        />
 
         <main className="flex flex-1 items-start justify-center px-5 py-10 lg:px-8">
           <div className="flex w-full max-w-md flex-col items-center gap-3 rounded-3xl border border-border/70 bg-card p-8 text-center shadow-card">
@@ -126,65 +122,63 @@ const Painel = () => {
     );
   }
 
+  const renderModule = () => {
+    switch (module) {
+      case "cliente-premiado":
+        return section === "participacoes" ? <ParticipacoesPanel /> : <PremiosPanel />;
+      case "portfolio":
+        return <PortfolioPanel />;
+      case "precificacao":
+        return <PricingPanel />;
+      default:
+        // Módulos previstos (Orçamentos, Clientes, Obras, Configurações) ainda não têm tela.
+        return null;
+    }
+  };
+
+  const activeModuleLabel =
+    ACTIVE_PANEL_MODULES.find((item) => item.key === module)?.label ?? "";
+
   return (
     <div className="min-h-full w-full bg-background">
-      <header className="gradient-ink">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-5 py-6 lg:px-8">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p className="text-[0.65rem] font-bold uppercase tracking-[0.24em] text-on-dark-muted">
-                Painel LH Prime
-              </p>
-              <h1 className="font-display text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
-                Cliente <span className="text-emerald">Premiado</span>
-              </h1>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button asChild variant="hero-secondary" size="sm">
-                <Link to="/cliente-premiado">Ver campanha</Link>
-              </Button>
-              <Button variant="hero-secondary" size="sm" onClick={() => void handleSignOut()}>
-                <LogOut className="size-4" />
-                Sair
-              </Button>
-            </div>
-          </div>
+      <PainelHeader
+        actions={
+          <>
+            <Button asChild variant="hero-secondary" size="sm">
+              <Link to="/cliente-premiado">Ver campanha</Link>
+            </Button>
+            <Button variant="hero-secondary" size="sm" onClick={() => void handleSignOut()}>
+              <LogOut className="size-4" />
+              Sair
+            </Button>
+          </>
+        }
+        navigation={
+          <div className="flex flex-col gap-3">
+            <PanelTabs
+              items={ACTIVE_PANEL_MODULES}
+              value={module}
+              onChange={(key) => setModule(key)}
+            />
 
-          <div className="flex gap-2">
-            {TABS.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => setTab(item.key)}
-                  className={cn(
-                    "flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-bold uppercase tracking-[0.12em] transition-colors",
-                    tab === item.key
-                      ? "border-emerald bg-emerald text-emerald-foreground"
-                      : "border-white/25 bg-white/10 text-on-dark backdrop-blur-sm hover:bg-white/20",
-                  )}
-                >
-                  <Icon className="size-4" />
-                  {item.label}
-                </button>
-              );
-            })}
+            {module === "cliente-premiado" ? (
+              <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/15 bg-white/5 p-1.5 pl-3">
+                <span className="text-[0.6rem] font-bold uppercase tracking-[0.2em] text-on-dark-muted">
+                  {activeModuleLabel}
+                </span>
+                <PanelTabs
+                  variant="secondary"
+                  items={CLIENTE_PREMIADO_SECTIONS}
+                  value={section}
+                  onChange={(key) => setSection(key)}
+                />
+              </div>
+            ) : null}
           </div>
-        </div>
-      </header>
+        }
+      />
 
-      <main className="mx-auto w-full max-w-6xl px-5 py-8 lg:px-8">
-        {tab === "participacoes" ? (
-          <ParticipacoesPanel />
-        ) : tab === "premios" ? (
-          <PremiosPanel />
-        ) : tab === "portfolio" ? (
-          <PortfolioPanel />
-        ) : (
-          <PricingPanel />
-        )}
-      </main>
+      <main className="mx-auto w-full max-w-6xl px-5 py-8 lg:px-8">{renderModule()}</main>
     </div>
   );
 };

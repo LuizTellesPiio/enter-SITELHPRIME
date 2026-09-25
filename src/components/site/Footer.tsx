@@ -2,6 +2,8 @@ import { Instagram, MapPin, MessageCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { NAV_LINKS, INSTAGRAM_URL, CITY } from "@/data/site";
 import { DEFAULT_WHATSAPP_LINK, WHATSAPP_DISPLAY } from "@/lib/whatsapp";
+import { BrandLogo } from "@/components/site/BrandLogo";
+import { BRAND } from "@/lib/brand";
 
 export const Footer = () => {
   return (
@@ -11,13 +13,12 @@ export const Footer = () => {
           <div className="flex flex-col gap-4">
             <a
               href="#inicio"
-              className="font-display text-xl font-bold tracking-tight text-white"
+              className="flex w-fit items-center text-white"
             >
-              LH <span className="text-emerald">Prime</span> Pinturas
+              <BrandLogo variant="full" size="lg" />
             </a>
             <p className="max-w-xs text-sm leading-relaxed text-on-dark-muted">
-              Pintura e acabamento de alto padrão em Bom Jesus do Itabapoana e
-              região.
+              {BRAND.tagline}
             </p>
           </div>
 
@@ -69,14 +70,14 @@ export const Footer = () => {
 
         <div className="flex flex-col items-center gap-3 border-t border-white/10 pt-6 sm:flex-row sm:justify-between">
           <p className="text-center text-xs text-on-dark-muted sm:text-left">
-            © {new Date().getFullYear()} LH Prime Pinturas. Todos os direitos
+            © {new Date().getFullYear()} {BRAND.name}. Todos os direitos
             reservados.
           </p>
           <Link
             to="/painel"
             className="text-xs font-medium text-on-dark-muted underline-offset-4 transition-colors hover:text-white hover:underline"
           >
-            Painel LH Prime
+            {BRAND.panel.eyebrow}
           </Link>
         </div>
       </div>

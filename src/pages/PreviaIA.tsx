@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BrandLogo } from "@/components/site/BrandLogo";
 import { AIColorPicker } from "@/components/site/AIColorPicker";
 import {
   buildInternalPrompt,
@@ -137,8 +138,8 @@ const BeforeAfterSlider = ({ before, after }: { before: string; after: string })
 const PageHeader = () => (
   <header className="gradient-ink border-b border-white/10">
     <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-5 lg:px-8">
-      <Link to="/" className="font-display text-lg font-bold tracking-tight text-white">
-        LH <span className="text-emerald">Prime</span> Pinturas
+      <Link to="/" className="flex items-center text-white">
+        <BrandLogo variant="full" size="md" />
       </Link>
       <Button asChild variant="hero-secondary" size="sm">
         <a href={IA_WHATSAPP_LINK} target="_blank" rel="noreferrer">
@@ -153,8 +154,8 @@ const PageHeader = () => (
 const PageFooter = () => (
   <footer className="gradient-ink border-t border-white/10">
     <div className="mx-auto flex w-full max-w-7xl flex-col items-center gap-4 px-5 py-12 text-center lg:px-8">
-      <Link to="/" className="font-display text-lg font-bold tracking-tight text-white">
-        LH <span className="text-emerald">Prime</span> Pinturas
+      <Link to="/" className="flex w-fit items-center text-white">
+        <BrandLogo variant="full" size="lg" />
       </Link>
       <p className="max-w-xl text-sm leading-relaxed text-on-dark-muted">
         Bom Jesus do Itabapoana - RJ e região · Pintura residencial e comercial com acabamento

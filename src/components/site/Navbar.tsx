@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/sheet";
 import { NAV_LINKS } from "@/data/site";
 import { DEFAULT_WHATSAPP_LINK } from "@/lib/whatsapp";
+import { BrandLogo } from "@/components/site/BrandLogo";
 import { cn } from "@/lib/utils";
 
 export const Navbar = () => {
@@ -23,9 +24,9 @@ export const Navbar = () => {
       <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-5 lg:px-8">
         <a
           href="#inicio"
-          className="font-display text-lg font-bold tracking-tight text-white"
+          className="flex items-center text-white"
         >
-          LH <span className="text-emerald">Prime</span> Pinturas
+          <BrandLogo variant="full" size="md" />
         </a>
 
         {/* Desktop nav */}
@@ -73,8 +74,8 @@ export const Navbar = () => {
             className="gradient-ink flex w-72 flex-col gap-6 border-white/10 text-white [&>button]:text-white"
           >
             <SheetHeader>
-              <SheetTitle className="text-left font-display text-lg font-bold text-white">
-                LH <span className="text-emerald">Prime</span> Pinturas
+              <SheetTitle className="flex items-center text-left text-white">
+                <BrandLogo variant="full" size="sm" />
               </SheetTitle>
             </SheetHeader>
             <nav className="flex flex-col gap-1">
