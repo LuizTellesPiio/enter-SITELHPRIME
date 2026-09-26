@@ -21,17 +21,18 @@ import {
 
 export interface BrandAssets {
   /**
-   * Logo completa (símbolo + nome). Enquanto for `null`, os componentes
-   * exibem o lockup em texto atual — a marca oficial não é redesenhada.
-   * Para publicar: coloque o arquivo em `public/brand/` e informe o
-   * caminho aqui (ex.: "/brand/lh-prime-logo.png").
+   * Logo completa (símbolo + nome + assinatura). Arquivo derivado do
+   * material oficial apenas por recorte — sem redesenho, recolor ou
+   * distorção.
    */
   full: string | null;
   /**
-   * Símbolo / monograma, usado em espaços reduzidos (cabeçalho do painel).
-   * Derivado do mesmo asset oficial, sem reinterpretar a marca.
+   * Símbolo (monograma LH + casa + traço), recorte do mesmo material
+   * oficial, para espaços reduzidos.
    */
   mark: string | null;
+  /** Original enviado pela marca, mantido intacto como referência. */
+  master: string | null;
 }
 
 export interface BrandConfig {
@@ -60,8 +61,9 @@ export const BRAND: BrandConfig = {
   initials: "LH",
   tagline: "Pintura e acabamento de alto padrão em Bom Jesus do Itabapoana e região.",
   assets: {
-    full: null,
-    mark: null,
+    full: "/brand/lh-prime-logo-completa.png",
+    mark: "/brand/lh-prime-simbolo.png",
+    master: "/brand/lh-prime-logo.png",
   },
   panel: {
     eyebrow: "Painel LH Prime",

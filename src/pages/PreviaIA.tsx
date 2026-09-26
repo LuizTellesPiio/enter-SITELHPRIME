@@ -139,7 +139,7 @@ const PageHeader = () => (
   <header className="gradient-ink border-b border-white/10">
     <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-5 lg:px-8">
       <Link to="/" className="flex items-center text-white">
-        <BrandLogo variant="full" size="md" />
+        <BrandLogo variant="mark" size="md" className="rounded-md" />
       </Link>
       <Button asChild variant="hero-secondary" size="sm">
         <a href={IA_WHATSAPP_LINK} target="_blank" rel="noreferrer">

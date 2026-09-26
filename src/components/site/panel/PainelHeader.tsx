@@ -20,9 +20,7 @@ export const PainelHeader = ({ actions, navigation, className }: PainelHeaderPro
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-5 py-6 lg:px-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-center gap-3">
-          <span className="flex h-11 shrink-0 items-center rounded-xl border border-white/15 bg-white/10 px-2.5 backdrop-blur-sm">
-            <BrandLogo variant="mark" size="sm" />
-          </span>
+          <BrandLogo variant="mark" size="md" className="rounded-lg" />
           <div>
             <p className="text-[0.65rem] font-bold uppercase tracking-[0.24em] text-on-dark-muted">
               {BRAND.panel.eyebrow}

@@ -15,14 +15,14 @@ export type BrandLogoSize = "sm" | "md" | "lg";
 
 const IMAGE_SIZES: Record<BrandLogoVariant, Record<BrandLogoSize, string>> = {
   full: {
-    sm: "h-7 max-w-[10rem]",
-    md: "h-9 max-w-[13rem]",
-    lg: "h-11 max-w-[16rem]",
+    sm: "h-10 max-w-[12rem]",
+    md: "h-12 max-w-[14rem]",
+    lg: "h-14 max-w-[16rem]",
   },
   mark: {
-    sm: "h-7 max-w-[7rem]",
-    md: "h-9 max-w-[9rem]",
-    lg: "h-11 max-w-[11rem]",
+    sm: "h-8 max-w-[9rem]",
+    md: "h-9 max-w-[11rem]",
+    lg: "h-11 max-w-[13rem]",
   },
 };
 

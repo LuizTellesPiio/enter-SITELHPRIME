@@ -26,7 +26,7 @@ export const Navbar = () => {
           href="#inicio"
           className="flex items-center text-white"
         >
-          <BrandLogo variant="full" size="md" />
+          <BrandLogo variant="mark" size="md" className="rounded-md" />
         </a>
 
         {/* Desktop nav */}
@@ -75,7 +75,7 @@ export const Navbar = () => {
           >
             <SheetHeader>
               <SheetTitle className="flex items-center text-left text-white">
-                <BrandLogo variant="full" size="sm" />
+                <BrandLogo variant="mark" size="sm" className="rounded-md" />
               </SheetTitle>
             </SheetHeader>
             <nav className="flex flex-col gap-1">
