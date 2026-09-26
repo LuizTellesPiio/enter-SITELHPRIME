@@ -1,0 +1,2 @@
+-- Teste de ordenação: move o Projeto 13 para o topo (mesma operação do painel).
+update public.portfolio_projects set sort_order = 0 where seq = 13;

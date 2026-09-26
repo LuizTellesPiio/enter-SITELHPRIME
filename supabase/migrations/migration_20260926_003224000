@@ -1,0 +1,2 @@
+-- Teste de ativar/desativar (mesma operação do painel).
+update public.portfolio_projects set is_active = false where seq = 13;

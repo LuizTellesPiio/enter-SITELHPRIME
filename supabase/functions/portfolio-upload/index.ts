@@ -4,10 +4,14 @@ import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supa
 /* Portfólio LH Prime — preparação de upload de vídeo no bucket        */
 /* portfolio-lhprime.                                                  */
 /*                                                                     */
-/* O arquivo NÃO passa por aqui: a função valida o admin, monta o      */
-/* caminho oficial e devolve uma URL de upload assinada. O navegador   */
-/* envia os bytes direto ao Storage com esse token — o service role    */
-/* nunca é exposto e upload anônimo continua bloqueado.                */
+/* O arquivo NÃO passa por aqui: a função valida o admin, descobre o    */
+/* projeto no banco, monta o caminho oficial a partir do slug e devolve */
+/* uma URL de upload assinada. O navegador envia os bytes direto ao     */
+/* Storage com esse token — o service role nunca é exposto e upload     */
+/* anônimo continua bloqueado.                                          */
+/*                                                                     */
+/* O caminho nunca vem do cliente: ele é derivado do tipo do projeto.   */
+/* Não existe mais limite fixo de quantidade de projetos.               */
 /* ------------------------------------------------------------------ */
 
 const corsHeaders = {
@@ -42,6 +46,14 @@ const BUCKET = "portfolio-lhprime";
 /** Sanidade (o limite real de tamanho é imposto pelo Storage no PUT). */
 const MAX_FILE_BYTES = 500 * 1024 * 1024;
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Tipos de arquivo aceitos por tipo de projeto. */
+const KINDS_BY_TYPE: Record<string, string[]> = {
+  "antes-depois": ["antes", "depois"],
+  finalizado: ["finalizado"],
+};
+
 /** Autorização administrativa no servidor: JWT válido + role = admin. */
 const requireAdmin = async (
   req: Request,
@@ -74,28 +86,27 @@ const requireAdmin = async (
   return { ok: true, supabase };
 };
 
-/** Caminho oficial no bucket conforme tipo/projeto/arquivo. */
+/** Caminho oficial no bucket, derivado do tipo do projeto e do slug. */
 const buildPath = (
+  type: string,
+  slug: string,
   kind: string,
-  project: number,
-): { ok: true; path: string; objectName: string } | { ok: false; message: string } => {
-  if (kind === "antes" || kind === "depois") {
-    if (project < 1 || project > 9) {
-      return { ok: false, message: "Antes e Depois aceita apenas Projetos 01 a 09." };
-    }
-    const folder = `antes-depois/projeto-0${project}`;
-    return { ok: true, path: `${folder}/${kind}.mp4`, objectName: kind };
+): { ok: true; path: string } | { ok: false; message: string } => {
+  if (!KINDS_BY_TYPE[type]?.includes(kind)) {
+    return {
+      ok: false,
+      message:
+        type === "finalizado"
+          ? "Projeto finalizado aceita apenas o arquivo finalizado."
+          : "Antes e Depois aceita apenas os arquivos antes e depois.",
+    };
   }
 
   if (kind === "finalizado") {
-    if (project < 10 || project > 12) {
-      return { ok: false, message: "Finalizado aceita apenas Projetos 10 a 12." };
-    }
-    const folder = `finalizados/projeto-${project}`;
-    return { ok: true, path: `${folder}/finalizado.mp4`, objectName: "finalizado" };
+    return { ok: true, path: `finalizados/${slug}/finalizado.mp4` };
   }
 
-  return { ok: false, message: "Tipo de arquivo inválido." };
+  return { ok: true, path: `antes-depois/${slug}/${kind}.mp4` };
 };
 
 Deno.serve(async (req) => {
@@ -108,14 +119,14 @@ Deno.serve(async (req) => {
 
   const body = await readJson(req);
 
+  const projectId = String(body.project_id ?? "").trim();
   const kind = String(body.kind ?? "").trim();
-  const project = typeof body.project === "number" ? body.project : Number(body.project);
   const fileName = String(body.file_name ?? "").trim();
   const fileType = String(body.file_type ?? "").trim();
   const fileSize = typeof body.file_size === "number" ? body.file_size : Number(body.file_size);
 
-  if (!Number.isInteger(project)) {
-    return json({ error: "invalid_project", message: "Selecione o projeto." }, 400);
+  if (!UUID_PATTERN.test(projectId)) {
+    return json({ error: "invalid_project", message: "Selecione um projeto do portfólio." }, 400);
   }
   if (!/\.mp4$/i.test(fileName)) {
     return json({ error: "invalid_file", message: "Envie um arquivo .mp4." }, 400);
@@ -130,8 +141,26 @@ Deno.serve(async (req) => {
     );
   }
 
-  const target = buildPath(kind, project);
-  if (!target.ok) return json({ error: "invalid_project", message: target.message }, 400);
+  const { data: project, error: projectError } = await supabase
+    .from("portfolio_projects")
+    .select("id, slug, type, title")
+    .eq("id", projectId)
+    .maybeSingle();
+
+  if (projectError) {
+    console.error("portfolio-upload: falha ao ler projeto", projectError.message);
+    return json(
+      { error: "project_lookup_failed", message: "Não foi possível ler o projeto agora." },
+      500,
+    );
+  }
+
+  if (!project) {
+    return json({ error: "project_not_found", message: "Projeto não encontrado." }, 404);
+  }
+
+  const target = buildPath(String(project.type), String(project.slug), kind);
+  if (!target.ok) return json({ error: "invalid_kind", message: target.message }, 400);
 
   /* Re-upload: remove o objeto anterior do caminho oficial (se existir). */
   await supabase.storage.from(BUCKET).remove([target.path]);
@@ -149,8 +178,9 @@ Deno.serve(async (req) => {
   const baseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   return json({
     ok: true,
-    token: data.token,
+    kind,
     path: data.path,
+    token: data.token,
     public_url: `${baseUrl}/storage/v1/object/public/${BUCKET}/${target.path}`,
   });
 });

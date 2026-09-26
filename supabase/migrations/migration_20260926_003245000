@@ -1,0 +1,2 @@
+-- Restaura o projeto de teste para o estado normal (ativo, no fim da lista).
+update public.portfolio_projects set is_active = true, sort_order = 13 where seq = 13;
