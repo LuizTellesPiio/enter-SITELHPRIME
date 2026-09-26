@@ -6,23 +6,29 @@ import { cn } from "@/lib/utils";
 /* Logo da marca                                                      */
 /*                                                                    */
 /* Renderiza o arquivo oficial quando configurado em `BRAND.assets` e */
-/* mantém o lockup em texto como fallback. A imagem nunca é           */
-/* distorcida: a altura é fixada e a largura acompanha a proporção.   */
+/* mantém o lockup em texto como fallback. A proporção é sempre       */
+/* preservada: define-se uma única dimensão e a outra acompanha.      */
 /* ------------------------------------------------------------------ */
 
-export type BrandLogoVariant = "full" | "mark";
+export type BrandLogoVariant = "full" | "compact" | "mark";
 export type BrandLogoSize = "sm" | "md" | "lg";
 
+/** Larguras pensadas por contexto: compact no header, full no rodapé. */
 const IMAGE_SIZES: Record<BrandLogoVariant, Record<BrandLogoSize, string>> = {
   full: {
-    sm: "h-10 max-w-[12rem]",
-    md: "h-12 max-w-[14rem]",
-    lg: "h-14 max-w-[16rem]",
+    sm: "w-[150px]",
+    md: "w-[180px]",
+    lg: "w-[200px]",
+  },
+  compact: {
+    sm: "w-[140px]",
+    md: "w-[150px]",
+    lg: "w-[170px]",
   },
   mark: {
-    sm: "h-8 max-w-[9rem]",
-    md: "h-9 max-w-[11rem]",
-    lg: "h-11 max-w-[13rem]",
+    sm: "h-10",
+    md: "h-12",
+    lg: "h-14",
   },
 };
 
@@ -39,7 +45,11 @@ const MARK_FALLBACK_SIZES: Record<BrandLogoSize, string> = {
 };
 
 interface BrandLogoProps {
-  /** "full" = logo completa (símbolo + nome); "mark" = símbolo. */
+  /**
+   * "full" = logo completa (rodapé e áreas amplas);
+   * "compact" = símbolo + PRIME (header);
+   * "mark" = símbolo (espaços reduzidos / header mobile).
+   */
   variant?: BrandLogoVariant;
   size?: BrandLogoSize;
   className?: string;
@@ -54,7 +64,7 @@ export const BrandLogo = ({
 }: BrandLogoProps) => {
   const [failed, setFailed] = useState(false);
 
-  const src = variant === "mark" ? BRAND.assets.mark : BRAND.assets.full;
+  const src = BRAND.assets[variant];
   const label = alt ?? BRAND.name;
 
   if (src && !failed) {
@@ -65,11 +75,7 @@ export const BrandLogo = ({
         draggable={false}
         decoding="async"
         onError={() => setFailed(true)}
-        className={cn(
-          "w-auto shrink-0 object-contain",
-          IMAGE_SIZES[variant][size],
-          className,
-        )}
+        className={cn("shrink-0 object-contain", IMAGE_SIZES[variant][size], className)}
       />
     );
   }

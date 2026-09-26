@@ -10,12 +10,12 @@ export const Footer = () => {
     <footer className="border-t border-white/10 bg-primary">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-10 px-5 py-14 lg:px-8">
         <div className="grid gap-10 lg:grid-cols-3">
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-5">
             <a
               href="#inicio"
               className="flex w-fit items-center text-white"
             >
-              <BrandLogo variant="full" size="lg" />
+              <BrandLogo variant="full" size="lg" className="rounded-xl" />
             </a>
             <p className="max-w-xs text-sm leading-relaxed text-on-dark-muted">
               {BRAND.tagline}

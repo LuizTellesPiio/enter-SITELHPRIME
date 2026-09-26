@@ -21,12 +21,14 @@ export const Navbar = () => {
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-primary/85 backdrop-blur-md">
-      <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-5 lg:px-8">
+      <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-5 lg:h-24 lg:px-8">
         <a
           href="#inicio"
           className="flex items-center text-white"
         >
-          <BrandLogo variant="mark" size="md" className="rounded-md" />
+          {/* Mobile: símbolo. Desktop: versão compacta (símbolo + PRIME). */}
+          <BrandLogo variant="mark" size="md" className="rounded-md lg:hidden" />
+          <BrandLogo variant="compact" size="md" className="hidden rounded-lg lg:block" />
         </a>
 
         {/* Desktop nav */}
@@ -75,7 +77,7 @@ export const Navbar = () => {
           >
             <SheetHeader>
               <SheetTitle className="flex items-center text-left text-white">
-                <BrandLogo variant="mark" size="sm" className="rounded-md" />
+                <BrandLogo variant="mark" size="md" className="rounded-md" />
               </SheetTitle>
             </SheetHeader>
             <nav className="flex flex-col gap-1">

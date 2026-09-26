@@ -21,14 +21,19 @@ import {
 
 export interface BrandAssets {
   /**
-   * Logo completa (símbolo + nome + assinatura). Arquivo derivado do
-   * material oficial apenas por recorte — sem redesenho, recolor ou
-   * distorção.
+   * Logo completa (símbolo + PRIME + assinatura institucional), para
+   * áreas amplas como o rodapé. Recorte do material oficial — sem
+   * redesenho, recolor ou distorção.
    */
   full: string | null;
   /**
-   * Símbolo (monograma LH + casa + traço), recorte do mesmo material
-   * oficial, para espaços reduzidos.
+   * Versão horizontal/compacta (símbolo + PRIME), para o header, onde
+   * a altura é limitada.
+   */
+  compact: string | null;
+  /**
+   * Símbolo (monograma LH + casa + traço), para espaços reduzidos como
+   * o header mobile.
    */
   mark: string | null;
   /** Original enviado pela marca, mantido intacto como referência. */
@@ -62,6 +67,7 @@ export const BRAND: BrandConfig = {
   tagline: "Pintura e acabamento de alto padrão em Bom Jesus do Itabapoana e região.",
   assets: {
     full: "/brand/lh-prime-logo-completa.png",
+    compact: "/brand/lh-prime-logo-compacta.png",
     mark: "/brand/lh-prime-simbolo.png",
     master: "/brand/lh-prime-logo.png",
   },

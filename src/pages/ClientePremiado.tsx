@@ -108,9 +108,10 @@ const STEPS = [
 
 const CampaignHeader = ({ link }: { link: string }) => (
   <header className="gradient-ink border-b border-white/10">
-    <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-5 lg:px-8">
+    <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-5 lg:h-24 lg:px-8">
       <Link to="/" className="flex items-center text-white">
-        <BrandLogo variant="mark" size="md" className="rounded-md" />
+        <BrandLogo variant="mark" size="md" className="rounded-md lg:hidden" />
+        <BrandLogo variant="compact" size="md" className="hidden rounded-lg lg:block" />
       </Link>
       <Button asChild variant="hero-secondary" size="sm">
         <a href={link} target="_blank" rel="noreferrer">
@@ -655,9 +656,9 @@ const CampaignFooter = ({ link }: { link: string }) => (
   <footer className="border-t border-white/10 bg-primary">
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-10 px-5 py-14 lg:px-8">
       <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-5">
           <Link to="/" className="flex w-fit items-center text-white">
-            <BrandLogo variant="full" size="lg" />
+            <BrandLogo variant="full" size="lg" className="rounded-xl" />
           </Link>
           <p className="max-w-xs text-sm leading-relaxed text-on-dark-muted">
             Pinturas &amp; Acabamentos de Alto Padrão. Da primeira ideia à
