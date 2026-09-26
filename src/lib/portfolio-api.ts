@@ -220,6 +220,50 @@ export const requestPortfolioUpload = async (
   };
 };
 
+/* ------------------------------------------------------------------ */
+/* DIAGNÓSTICO TEMPORÁRIO DO UPLOAD                                    */
+/* ------------------------------------------------------------------ */
+/* Bloco para descobrir a causa exata de falha no envio do .mp4.        */
+/* Remover quando o upload estiver estável.                             */
+/* ------------------------------------------------------------------ */
+
+export interface PortfolioUploadDiagnostics {
+  bucket: string;
+  path: string;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  hasToken: boolean;
+  /** O método existe no cliente instalado? */
+  methodAvailable: boolean;
+  /** Status HTTP retornado pelo Storage, quando houver. */
+  status?: number | string;
+  statusText?: string;
+  errorName?: string;
+  errorMessage?: string;
+  /** Resposta bruta do Storage, quando disponível. */
+  raw?: string;
+}
+
+const describeError = (error: unknown): { name?: string; message?: string; raw?: string } => {
+  if (!error || typeof error !== "object") {
+    return { name: typeof error, message: String(error) };
+  }
+
+  const value = error as Record<string, unknown>;
+  const name = typeof value.name === "string" ? value.name : undefined;
+  const message = typeof value.message === "string" ? value.message : undefined;
+
+  let raw: string | undefined;
+  try {
+    raw = JSON.stringify(value, (_key, item) => (typeof item === "bigint" ? String(item) : item));
+  } catch {
+    raw = undefined;
+  }
+
+  return { name, message, raw };
+};
+
 /** Tempo máximo de espera pelo envio dos bytes (evita travar indefinidamente). */
 const UPLOAD_TIMEOUT_MS = 120_000;
 
@@ -231,29 +275,99 @@ export const uploadPortfolioVideo = async (input: {
   path: string;
   token: string;
   file: File;
-}): Promise<{ ok: boolean; message?: string }> => {
-  let timer: number | undefined;
+}): Promise<{
+  ok: boolean;
+  message?: string;
+  diagnostics: PortfolioUploadDiagnostics;
+}> => {
+  const base: PortfolioUploadDiagnostics = {
+    bucket: PORTFOLIO_BUCKET,
+    path: input.path,
+    fileName: input.file.name,
+    fileType: input.file.type,
+    fileSize: input.file.size,
+    hasToken: Boolean(input.token),
+    methodAvailable: false,
+  };
 
+  let timer: number | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = window.setTimeout(() => reject(new Error("upload_timeout")), UPLOAD_TIMEOUT_MS);
   });
 
   try {
+    /* O envio assinado vive no cliente do bucket: storage.from(bucket). */
+    const bucketClient = supabase.storage.from(PORTFOLIO_BUCKET);
+    const uploadToSignedUrl = bucketClient.uploadToSignedUrl?.bind(bucketClient);
+    base.methodAvailable = typeof uploadToSignedUrl === "function";
+
+    console.groupCollapsed("[portfolio] upload assinado");
+    console.log("bucket:", base.bucket);
+    console.log("path:", base.path);
+    console.log("file.name:", base.fileName);
+    console.log("file.type:", base.fileType);
+    console.log("file.size:", base.fileSize);
+    console.log("token presente:", base.hasToken);
+    console.log("uploadToSignedUrl disponível:", base.methodAvailable);
+
+    if (!uploadToSignedUrl) {
+      console.warn("uploadToSignedUrl indisponível neste cliente de Storage.");
+      console.groupEnd();
+      return {
+        ok: false,
+        message: "Este cliente de Storage não suporta upload assinado.",
+        diagnostics: { ...base, errorName: "TypeError" },
+      };
+    }
+
     const result = await Promise.race([
-      supabase.storage.uploadToSignedUrl(input.path, input.token, input.file, {
+      uploadToSignedUrl(input.path, input.token, input.file, {
         contentType: input.file.type || "video/mp4",
       }),
       timeout,
     ]);
 
-    if (result.error) return { ok: false, message: result.error.message };
-    return { ok: true };
-  } catch (err) {
-    if (err instanceof Error && err.message === "upload_timeout") {
-      return { ok: false, message: UPLOAD_TIMEOUT_MESSAGE };
+    if (result.error) {
+      const described = describeError(result.error);
+      const diagnostics: PortfolioUploadDiagnostics = {
+        ...base,
+        status: result.error.status ?? result.error.statusCode,
+        statusText: typeof result.error.statusText === "string" ? result.error.statusText : undefined,
+        errorName: described.name,
+        errorMessage: described.message,
+        raw: described.raw,
+      };
+      console.error("[portfolio] upload assinado FALHOU", diagnostics);
+      console.groupEnd();
+      return {
+        ok: false,
+        message: described.message ?? "Falha ao enviar o vídeo. Tente novamente.",
+        diagnostics,
+      };
     }
-    console.error("uploadPortfolioVideo: falha no envio", err);
-    return { ok: false, message: "Não foi possível enviar o vídeo. Tente novamente." };
+
+    console.log("[portfolio] upload assinado OK", result.data);
+    console.groupEnd();
+    return { ok: true, diagnostics: base };
+  } catch (err) {
+    const described = describeError(err);
+    const isTimeout = err instanceof Error && err.message === "upload_timeout";
+    const diagnostics: PortfolioUploadDiagnostics = {
+      ...base,
+      status: isTimeout ? "timeout" : undefined,
+      errorName: described.name,
+      errorMessage: described.message,
+      raw: described.raw,
+    };
+    console.error("[portfolio] upload assinado lançou exceção", diagnostics);
+    console.groupEnd();
+    return {
+      ok: false,
+      message: isTimeout
+        ? UPLOAD_TIMEOUT_MESSAGE
+        : described.message ?? "Não foi possível enviar o vídeo. Tente novamente.",
+      diagnostics,
+    };
   } finally {
     if (timer !== undefined) window.clearTimeout(timer);
   }

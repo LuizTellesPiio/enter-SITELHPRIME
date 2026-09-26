@@ -80,8 +80,11 @@ const requireAdmin = async (
     .maybeSingle();
 
   if (profile?.role !== "admin") {
+    console.warn("portfolio-upload: acesso negado (nao-admin)", { userId: data.user.id });
     return { ok: false, response: json({ error: "forbidden" }, 403) };
   }
+
+  console.log("portfolio-upload: admin autorizado", { userId: data.user.id, role: profile.role });
 
   return { ok: true, supabase };
 };
@@ -143,9 +146,21 @@ Deno.serve(async (req) => {
 
   const { data: project, error: projectError } = await supabase
     .from("portfolio_projects")
-    .select("id, slug, type, title")
+    .select("id, seq, slug, type, title")
     .eq("id", projectId)
     .maybeSingle();
+
+  console.log("portfolio-upload: projeto selecionado", {
+    projectId,
+    seq: project?.seq ?? null,
+    slug: project?.slug ?? null,
+    type: project?.type ?? null,
+    lookupOk: !projectError && Boolean(project),
+    lookupError: projectError?.message ?? null,
+    kind,
+    fileSize,
+    fileType,
+  });
 
   if (projectError) {
     console.error("portfolio-upload: falha ao ler projeto", projectError.message);
@@ -160,12 +175,37 @@ Deno.serve(async (req) => {
   }
 
   const target = buildPath(String(project.type), String(project.slug), kind);
-  if (!target.ok) return json({ error: "invalid_kind", message: target.message }, 400);
+  if (!target.ok) {
+    console.warn("portfolio-upload: tipo de arquivo invalido", {
+      slug: project.slug,
+      type: project.type,
+      kind,
+    });
+    return json({ error: "invalid_kind", message: target.message }, 400);
+  }
+
+  console.log("portfolio-upload: path gerado", {
+    bucket: BUCKET,
+    slug: project.slug,
+    type: project.type,
+    kind,
+    path: target.path,
+  });
 
   /* Re-upload: remove o objeto anterior do caminho oficial (se existir). */
-  await supabase.storage.from(BUCKET).remove([target.path]);
+  const removed = await supabase.storage.from(BUCKET).remove([target.path]);
 
   const { data, error } = await supabase.storage.from(BUCKET).createSignedUploadUrl(target.path);
+
+  console.log("portfolio-upload: createSignedUploadUrl", {
+    path: target.path,
+    ok: !error && Boolean(data?.token),
+    tokenEmitido: Boolean(data?.token),
+    signedPath: data?.path ?? null,
+    erro: error?.message ?? null,
+    removeAnteriorOk: !removed.error,
+    removeAnteriorErro: removed.error?.message ?? null,
+  });
 
   if (error || !data?.token) {
     console.error("portfolio-upload: falha ao criar URL assinada", error?.message);
