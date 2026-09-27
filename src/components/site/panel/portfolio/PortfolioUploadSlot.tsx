@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { copyToClipboard } from "@/lib/campaign-share";
 import {
+  describeTokenTiming,
   portfolioPublicUrl,
   requestPortfolioUpload,
   setProjectFilePath,
@@ -114,11 +115,33 @@ export const PortfolioUploadSlot = ({ project, kind, onUploaded }: PortfolioUplo
       }
 
       setPhase("uploading");
+
+      /* DIAGNÓSTICO TEMPORÁRIO — token recém-gerado nesta chamada. */
+      const tokenRecebido = await describeTokenTiming(prepared.token);
+      console.log("[portfolio] token recém-gerado (nesta chamada)", {
+        fingerprint: tokenRecebido.hash,
+        iat: tokenRecebido.iat,
+        exp: tokenRecebido.exp,
+        agoraLocal: tokenRecebido.now,
+        ttlRestante: tokenRecebido.ttlSeconds,
+        claims: tokenRecebido.payloadKeys,
+        medidoNoBackend: prepared.tokenDebug,
+      });
+
       const uploaded = await uploadPortfolioVideo({
         path: prepared.path,
         token: prepared.token,
         file,
       });
+
+      if (uploaded.ok) {
+        const tokenUsado = uploaded.diagnostics.tokenTiming;
+        console.log("[portfolio] comparação do token", {
+          fingerprintRecebido: tokenRecebido.hash,
+          fingerprintUsado: tokenUsado?.hash,
+          mesmoToken: tokenUsado?.hash === tokenRecebido.hash,
+        });
+      }
 
       if (!uploaded.ok) {
         setErrorMessage(uploaded.message ?? "Falha ao enviar o vídeo. Tente novamente.");
@@ -283,6 +306,21 @@ export const PortfolioUploadSlot = ({ project, kind, onUploaded }: PortfolioUplo
                   {failure.methodAvailable ? "disponível" : "indisponível"}
                 </dd>
               </div>
+
+              {failure.tokenTiming ? (
+                <div className="flex flex-col gap-1">
+                  <dt className="font-bold text-destructive">tempo do token:</dt>
+                  <dd>
+                    iat {failure.tokenTiming.iat ?? "(sem iat)"} · exp{" "}
+                    {failure.tokenTiming.exp ?? "(sem exp)"} · agora {failure.tokenTiming.now} · TTL{" "}
+                    {failure.tokenTiming.ttlSeconds ?? "?"}s · idade{" "}
+                    {failure.tokenTiming.ageSeconds ?? "?"}s · hash {failure.tokenTiming.hash}
+                  </dd>
+                  <dd className="break-all">
+                    claims: {failure.tokenTiming.payloadKeys.join(", ") || "(sem payload)"}
+                  </dd>
+                </div>
+              ) : null}
               {failure.raw ? (
                 <div className="flex flex-col gap-1">
                   <dt className="font-bold text-destructive">resposta bruta do Storage:</dt>

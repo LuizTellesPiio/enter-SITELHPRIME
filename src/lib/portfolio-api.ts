@@ -168,6 +168,8 @@ export interface RequestUploadResult {
   publicUrl?: string;
   error?: string;
   message?: string;
+  /** DIAGNÓSTICO TEMPORÁRIO — iat/exp/now medidos no backend. */
+  tokenDebug?: Record<string, unknown>;
 }
 
 const asText = (value: unknown): string | null =>
@@ -210,6 +212,10 @@ export const requestPortfolioUpload = async (
       token: raw.token,
       path: raw.path,
       publicUrl: asText(raw?.public_url) ?? undefined,
+      tokenDebug:
+        raw?.token_debug && typeof raw.token_debug === "object"
+          ? (raw.token_debug as Record<string, unknown>)
+          : undefined,
     };
   }
 
@@ -243,7 +249,67 @@ export interface PortfolioUploadDiagnostics {
   errorMessage?: string;
   /** Resposta bruta do Storage, quando disponível. */
   raw?: string;
+  /** iat/exp/now do token efetivamente usado no upload. */
+  tokenTiming?: PortfolioTokenTiming;
 }
+
+export interface PortfolioTokenTiming {
+  iat: number | null;
+  exp: number | null;
+  now: number;
+  ttlSeconds: number | null;
+  ageSeconds: number | null;
+  /** Impressão digital do token (permite comparar sem expor o valor). */
+  hash: string;
+  payloadKeys: string[];
+}
+
+/** Decodifica SOMENTE o payload do JWT do token de upload (sem assinatura). */
+const decodeTokenPayload = (token: string): Record<string, unknown> | null => {
+  try {
+    const part = token.split(".")[1];
+    if (!part) return null;
+    const normalized = part.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+    return JSON.parse(atob(padded)) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+};
+
+/** Impressão digital curta do token: compara sem expor o valor completo. */
+const tokenFingerprint = async (token: string): Promise<string> => {
+  try {
+    if (!globalThis.crypto?.subtle) return `len-${token.length}`;
+    const digest = await globalThis.crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(token),
+    );
+    return Array.from(new Uint8Array(digest))
+      .slice(0, 6)
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+  } catch {
+    return `len-${token.length}`;
+  }
+};
+
+export const describeTokenTiming = async (token: string): Promise<PortfolioTokenTiming> => {
+  const now = Math.floor(Date.now() / 1000);
+  const payload = decodeTokenPayload(token);
+  const iat = typeof payload?.iat === "number" ? payload.iat : null;
+  const exp = typeof payload?.exp === "number" ? payload.exp : null;
+
+  return {
+    iat,
+    exp,
+    now,
+    ttlSeconds: exp === null ? null : exp - now,
+    ageSeconds: iat === null ? null : now - iat,
+    hash: await tokenFingerprint(token),
+    payloadKeys: payload ? Object.keys(payload) : [],
+  };
+};
 
 const describeError = (error: unknown): { name?: string; message?: string; raw?: string } => {
   if (!error || typeof error !== "object") {
@@ -301,6 +367,9 @@ export const uploadPortfolioVideo = async (input: {
     const uploadToSignedUrl = bucketClient.uploadToSignedUrl?.bind(bucketClient);
     base.methodAvailable = typeof uploadToSignedUrl === "function";
 
+    /* DIAGNÓSTICO TEMPORÁRIO — tempo de vida do token que será enviado. */
+    base.tokenTiming = await describeTokenTiming(input.token);
+
     console.groupCollapsed("[portfolio] upload assinado");
     console.log("bucket:", base.bucket);
     console.log("path:", base.path);
@@ -309,6 +378,15 @@ export const uploadPortfolioVideo = async (input: {
     console.log("file.size:", base.fileSize);
     console.log("token presente:", base.hasToken);
     console.log("uploadToSignedUrl disponível:", base.methodAvailable);
+    console.log("token iat/exp/now (epoch s):", {
+      iat: base.tokenTiming.iat,
+      exp: base.tokenTiming.exp,
+      now: base.tokenTiming.now,
+      ttlRestante: base.tokenTiming.ttlSeconds,
+      idadeDoToken: base.tokenTiming.ageSeconds,
+      fingerprint: base.tokenTiming.hash,
+      claims: base.tokenTiming.payloadKeys,
+    });
 
     if (!uploadToSignedUrl) {
       console.warn("uploadToSignedUrl indisponível neste cliente de Storage.");
