@@ -1,0 +1,13 @@
+update public.portfolio_projects set title = 'Renovação completa de fachada residencial' where seq = 1 and title = 'Projeto 01';
+update public.portfolio_projects set title = 'Finalização interna com pintura e acabamento fino' where seq = 2 and title = 'Projeto 02';
+update public.portfolio_projects set title = 'Pintura e valorização de área externa' where seq = 3 and title = 'Projeto 03';
+update public.portfolio_projects set title = 'Pintura profissional e renovação visual do imóvel' where seq = 4 and title = 'Projeto 04';
+update public.portfolio_projects set title = 'Melhoria estética e proteção de superfícies' where seq = 5 and title = 'Projeto 05';
+update public.portfolio_projects set title = 'Renovação residencial com padrão de acabamento superior' where seq = 6 and title = 'Projeto 06';
+update public.portfolio_projects set title = 'Transformação de ambiente com acabamento refinado' where seq = 7 and title = 'Projeto 07';
+update public.portfolio_projects set title = 'Recuperação e pintura de superfícies residenciais' where seq = 8 and title = 'Projeto 08';
+update public.portfolio_projects set title = 'Revitalização de ambiente com novo acabamento' where seq = 9 and title = 'Projeto 09';
+update public.portfolio_projects set title = 'Ambiente finalizado com acabamento impecável' where seq = 10 and title = 'Projeto 10';
+update public.portfolio_projects set title = 'Obra concluída com pintura de alto padrão' where seq = 11 and title = 'Projeto 11';
+update public.portfolio_projects set title = 'Entrega final com acabamento refinado' where seq = 12 and title = 'Projeto 12';
+update public.portfolio_projects set is_active = false where seq = 13 and title = 'Pintura externa — Bairro X' and coalesce(before_path, '') = '' and coalesce(after_path, '') = '' and coalesce(video_path, '') = '';

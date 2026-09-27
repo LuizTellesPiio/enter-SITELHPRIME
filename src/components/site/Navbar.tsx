@@ -33,15 +33,25 @@ export const Navbar = () => {
 
         {/* Desktop nav */}
         <nav className="hidden items-center gap-7 lg:flex">
-          {NAV_LINKS.map((link) => (
-            <a
-              key={link.href}
-              href={link.href}
-              className="text-sm font-medium text-on-dark transition-colors hover:text-white"
-            >
-              {link.label}
-            </a>
-          ))}
+          {NAV_LINKS.map((link) =>
+            link.to ? (
+              <Link
+                key={link.to}
+                to={link.to}
+                className="text-sm font-medium text-on-dark transition-colors hover:text-white"
+              >
+                {link.label}
+              </Link>
+            ) : (
+              <a
+                key={link.href}
+                href={link.href}
+                className="text-sm font-medium text-on-dark transition-colors hover:text-white"
+              >
+                {link.label}
+              </a>
+            ),
+          )}
           <Link
             to="/cliente-premiado"
             className="text-sm font-medium text-emerald transition-colors hover:text-white"
@@ -81,18 +91,31 @@ export const Navbar = () => {
               </SheetTitle>
             </SheetHeader>
             <nav className="flex flex-col gap-1">
-              {NAV_LINKS.map((link) => (
-                <a
-                  key={link.href}
-                  href={link.href}
-                  onClick={closeMenu}
-                  className={cn(
-                    "rounded-lg px-3 py-2.5 text-base font-medium text-on-dark transition-colors hover:bg-white/10 hover:text-white",
-                  )}
-                >
-                  {link.label}
-                </a>
-              ))}
+              {NAV_LINKS.map((link) =>
+                link.to ? (
+                  <Link
+                    key={link.to}
+                    to={link.to}
+                    onClick={closeMenu}
+                    className={cn(
+                      "rounded-lg px-3 py-2.5 text-base font-medium text-on-dark transition-colors hover:bg-white/10 hover:text-white",
+                    )}
+                  >
+                    {link.label}
+                  </Link>
+                ) : (
+                  <a
+                    key={link.href}
+                    href={link.href}
+                    onClick={closeMenu}
+                    className={cn(
+                      "rounded-lg px-3 py-2.5 text-base font-medium text-on-dark transition-colors hover:bg-white/10 hover:text-white",
+                    )}
+                  >
+                    {link.label}
+                  </a>
+                ),
+              )}
               <Link
                 to="/cliente-premiado"
                 onClick={closeMenu}

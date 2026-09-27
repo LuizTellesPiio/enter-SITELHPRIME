@@ -27,15 +27,25 @@ export const Footer = () => {
               Navegação
             </h4>
             <nav className="flex flex-col gap-2">
-              {NAV_LINKS.map((link) => (
-                <a
-                  key={link.href}
-                  href={link.href}
-                  className="w-fit text-sm text-on-dark-muted transition-colors hover:text-white"
-                >
-                  {link.label}
-                </a>
-              ))}
+              {NAV_LINKS.map((link) =>
+                link.to ? (
+                  <Link
+                    key={link.to}
+                    to={link.to}
+                    className="w-fit text-sm text-on-dark-muted transition-colors hover:text-white"
+                  >
+                    {link.label}
+                  </Link>
+                ) : (
+                  <a
+                    key={link.href}
+                    href={link.href}
+                    className="w-fit text-sm text-on-dark-muted transition-colors hover:text-white"
+                  >
+                    {link.label}
+                  </a>
+                ),
+              )}
             </nav>
           </div>
 

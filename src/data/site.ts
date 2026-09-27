@@ -78,62 +78,6 @@ export const DIFFERENTIALS = [
   "Bom Jesus do Itabapoana e região",
 ];
 
-export type GalleryCategory =
-  | "Todos"
-  | "Residencial"
-  | "Comercial"
-  | "Interno"
-  | "Externo"
-  | "Antes e Depois";
-
-export const GALLERY_CATEGORIES: GalleryCategory[] = [
-  "Todos",
-  "Residencial",
-  "Comercial",
-  "Interno",
-  "Externo",
-  "Antes e Depois",
-];
-
-export interface GalleryItem {
-  id: string;
-  label: string;
-  category: Exclude<GalleryCategory, "Todos">;
-}
-
-export const GALLERY: GalleryItem[] = [
-  { id: "gal-1", label: "Ambiente interno com pintura renovada", category: "Interno" },
-  { id: "gal-2", label: "Ambiente comercial com pintura nova", category: "Comercial" },
-  { id: "gal-3", label: "Parede externa com acabamento renovado", category: "Externo" },
-  { id: "gal-4", label: "Sala residencial após a pintura", category: "Residencial" },
-  { id: "gal-5", label: "Fachada residencial repaginada", category: "Externo" },
-  { id: "gal-6", label: "Quarto renovado com novo acabamento", category: "Interno" },
-];
-
-export interface BeforeAfterProject {
-  id: string;
-  title: string;
-  tag: string;
-  description: string;
-}
-
-export const BEFORE_AFTER_PROJECTS: BeforeAfterProject[] = [
-  {
-    id: "ba-1",
-    title: "Transformação de ambiente",
-    tag: "Pintura interna",
-    description:
-      "Renovação completa do ambiente com novo acabamento.",
-  },
-  {
-    id: "ba-2",
-    title: "Renovação de fachada",
-    tag: "Pintura de fachada",
-    description:
-      "Preparação da superfície e nova pintura externa.",
-  },
-];
-
 export interface ProcessStep {
   number: string;
   title: string;
@@ -200,11 +144,19 @@ export const FAQ_ITEMS: FaqItem[] = [
   },
 ];
 
-export const NAV_LINKS = [
+export interface NavLink {
+  label: string;
+  /** Âncora de seção na Home (usada quando a entrada não tem rota). */
+  href: string;
+  /** Rota interna do site, quando a entrada aponta para uma página. */
+  to?: string;
+}
+
+export const NAV_LINKS: NavLink[] = [
   { label: "Serviços", href: "#servicos" },
   { label: "Descontos", href: "#descontos" },
   { label: "Antes e Depois", href: "#antes-e-depois" },
-  { label: "Galeria", href: "#galeria" },
+  { label: "Projetos", href: "/portfolio", to: "/portfolio" },
   { label: "LH Prime IA", href: "#previa" },
   { label: "Processo", href: "#processo" },
   { label: "FAQ", href: "#faq" },

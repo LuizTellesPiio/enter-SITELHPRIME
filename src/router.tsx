@@ -1,4 +1,5 @@
 import Index from "./pages/Index";
+import Portfolio from "./pages/Portfolio";
 import ClientePremiado from "./pages/ClientePremiado";
 import Painel from "./pages/Painel";
 import PreviaIA from "./pages/PreviaIA";
@@ -9,6 +10,11 @@ export const routers = [
     path: "/",
     name: "home",
     element: <Index />,
+  },
+  {
+    path: "/portfolio",
+    name: "portfolio",
+    element: <Portfolio />,
   },
   {
     path: "/cliente-premiado",

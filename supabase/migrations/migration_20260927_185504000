@@ -1,0 +1,6 @@
+-- Portfólio público: leitura anônima somente dos projetos ativos.
+create policy portfolio_projects_public_read on public.portfolio_projects
+  for select to anon, authenticated
+  using (is_active = true);
+
+revoke insert, update, delete, truncate on public.portfolio_projects from anon;
