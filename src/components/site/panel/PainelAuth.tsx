@@ -54,15 +54,19 @@ export const PainelAuth = () => {
   // Com um admin já criado, o cadastro fica fechado (decisão vem do backend).
   useEffect(() => {
     let active = true;
-    supabase
-      .rpc("admin_exists")
-      .then(({ data, error }) => {
+
+    const loadSignupAvailability = async () => {
+      try {
+        const { data, error } = await supabase.rpc("admin_exists");
         if (!active) return;
         setSignupAvailable(error ? false : data === false);
-      })
-      .catch(() => {
+      } catch {
         if (active) setSignupAvailable(false);
-      });
+      }
+    };
+
+    void loadSignupAvailability();
+
     return () => {
       active = false;
     };
