@@ -20,19 +20,21 @@ export const Navbar = () => {
   const closeMenu = () => setOpen(false);
 
   return (
+    /* Menu desktop a partir de 1280px (xl): abaixo disso os itens não cabem
+       em uma única linha e o cabeçalho passa para a versão com hambúrguer. */
     <header className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-primary/85 backdrop-blur-md">
-      <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-5 lg:h-24 lg:px-8">
+      <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-5 xl:h-24 xl:px-8">
         <a
           href="#inicio"
           className="flex items-center text-white"
         >
           {/* Mobile: símbolo. Desktop: versão compacta (símbolo + PRIME). */}
-          <BrandLogo variant="mark" size="md" className="rounded-md lg:hidden" />
-          <BrandLogo variant="compact" size="md" className="hidden rounded-lg lg:block" />
+          <BrandLogo variant="mark" size="md" className="rounded-md xl:hidden" />
+          <BrandLogo variant="compact" size="md" className="hidden rounded-lg xl:block" />
         </a>
 
         {/* Desktop nav */}
-        <nav className="hidden items-center gap-7 lg:flex">
+        <nav className="hidden items-center gap-7 xl:flex">
           {NAV_LINKS.map((link) =>
             link.to ? (
               <Link
@@ -60,7 +62,7 @@ export const Navbar = () => {
           </Link>
         </nav>
 
-        <div className="hidden lg:block">
+        <div className="hidden xl:block">
           <Button asChild variant="whatsapp">
             <a href={DEFAULT_WHATSAPP_LINK} target="_blank" rel="noreferrer">
               <MessageCircle className="size-4" />
@@ -75,7 +77,7 @@ export const Navbar = () => {
             <Button
               variant="ghost"
               size="icon"
-              className="text-white hover:bg-white/10 lg:hidden"
+              className="text-white hover:bg-white/10 xl:hidden"
               aria-label="Abrir menu"
             >
               <Menu className="size-5" />
