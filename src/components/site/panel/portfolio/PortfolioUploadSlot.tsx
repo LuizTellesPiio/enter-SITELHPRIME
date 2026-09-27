@@ -13,12 +13,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { copyToClipboard } from "@/lib/campaign-share";
 import {
-  describeTokenTiming,
   portfolioPublicUrl,
   requestPortfolioUpload,
   setProjectFilePath,
   uploadPortfolioVideo,
-  type PortfolioUploadDiagnostics,
 } from "@/lib/portfolio-api";
 import {
   KIND_LABEL,
@@ -46,7 +44,6 @@ export const PortfolioUploadSlot = ({ project, kind, onUploaded }: PortfolioUplo
   const [file, setFile] = useState<File | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
   const [errorMessage, setErrorMessage] = useState("");
-  const [failure, setFailure] = useState<PortfolioUploadDiagnostics | null>(null);
   const [copied, setCopied] = useState(false);
   const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -61,14 +58,12 @@ export const PortfolioUploadSlot = ({ project, kind, onUploaded }: PortfolioUplo
     const isMp4 = selected.type === "video/mp4" || /\.mp4$/i.test(selected.name);
     if (!isMp4) {
       setErrorMessage("Envie um arquivo de vídeo .mp4.");
-      setFailure(null);
       setPhase("error");
       return;
     }
     setFile(selected);
     setPhase("idle");
     setErrorMessage("");
-    setFailure(null);
   };
 
   const handleUpload = async () => {
@@ -76,7 +71,6 @@ export const PortfolioUploadSlot = ({ project, kind, onUploaded }: PortfolioUplo
 
     setPhase("requesting");
     setErrorMessage("");
-    setFailure(null);
 
     try {
       const prepared = await requestPortfolioUpload({
@@ -87,46 +81,14 @@ export const PortfolioUploadSlot = ({ project, kind, onUploaded }: PortfolioUplo
         file_type: file.type || "video/mp4",
       });
 
-      console.log("[portfolio] preparação do upload", {
-        projeto: `${project.slug} (${project.type})`,
-        arquivo: kind,
-        ok: prepared.ok,
-        path: prepared.path,
-        tokenPresente: Boolean(prepared.token),
-        erro: prepared.error,
-        mensagem: prepared.message,
-      });
-
       if (!prepared.ok || !prepared.token || !prepared.path) {
+        console.error("PortfolioUploadSlot: preparação do upload recusada", prepared.error);
         setErrorMessage(prepared.message ?? "Não foi possível preparar o upload.");
-        setFailure({
-          bucket: "portfolio-lhprime",
-          path: prepared.path ?? officialPath,
-          fileName: file.name,
-          fileType: file.type,
-          fileSize: file.size,
-          hasToken: Boolean(prepared.token),
-          methodAvailable: false,
-          errorName: prepared.error,
-          errorMessage: prepared.message,
-        });
         setPhase("error");
         return;
       }
 
       setPhase("uploading");
-
-      /* DIAGNÓSTICO TEMPORÁRIO — token recém-gerado nesta chamada. */
-      const tokenRecebido = await describeTokenTiming(prepared.token);
-      console.log("[portfolio] token recém-gerado (nesta chamada)", {
-        fingerprint: tokenRecebido.hash,
-        iat: tokenRecebido.iat,
-        exp: tokenRecebido.exp,
-        agoraLocal: tokenRecebido.now,
-        ttlRestante: tokenRecebido.ttlSeconds,
-        claims: tokenRecebido.payloadKeys,
-        medidoNoBackend: prepared.tokenDebug,
-      });
 
       const uploaded = await uploadPortfolioVideo({
         path: prepared.path,
@@ -134,31 +96,17 @@ export const PortfolioUploadSlot = ({ project, kind, onUploaded }: PortfolioUplo
         file,
       });
 
-      if (uploaded.ok) {
-        const tokenUsado = uploaded.diagnostics.tokenTiming;
-        console.log("[portfolio] comparação do token", {
-          fingerprintRecebido: tokenRecebido.hash,
-          fingerprintUsado: tokenUsado?.hash,
-          mesmoToken: tokenUsado?.hash === tokenRecebido.hash,
-        });
-      }
-
       if (!uploaded.ok) {
         setErrorMessage(uploaded.message ?? "Falha ao enviar o vídeo. Tente novamente.");
-        setFailure(uploaded.diagnostics);
         setPhase("error");
         return;
       }
 
       const saved = await setProjectFilePath(project.id, kind, prepared.path);
 
-      console.log("[portfolio] status final do upload", {
-        projeto: project.slug,
-        arquivo: kind,
-        path: prepared.path,
-        bytes: file.size,
-        registroNoBanco: saved.ok,
-      });
+      if (!saved.ok) {
+        console.error("PortfolioUploadSlot: vídeo enviado, mas o projeto não registrou o arquivo");
+      }
 
       setFile(null);
       setPhase("idle");
@@ -261,75 +209,10 @@ export const PortfolioUploadSlot = ({ project, kind, onUploaded }: PortfolioUplo
       )}
 
       {phase === "error" ? (
-        <div className="flex flex-col gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2">
-          <p className="flex items-start gap-2 text-xs text-destructive">
-            <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
-            {errorMessage}
-          </p>
-
-          {/* DIAGNÓSTICO TEMPORÁRIO — remover quando o upload estiver estável. */}
-          {failure ? (
-            <dl className="flex flex-col gap-1 rounded-lg border border-destructive/20 bg-background/70 px-3 py-2 font-mono text-[0.68rem] leading-relaxed text-muted-foreground">
-              <div className="flex gap-1">
-                <dt className="font-bold text-destructive">error.message:</dt>
-                <dd className="break-all">{failure.errorMessage ?? "(vazio)"}</dd>
-              </div>
-              <div className="flex gap-1">
-                <dt className="font-bold text-destructive">error.name:</dt>
-                <dd className="break-all">{failure.errorName ?? "(vazio)"}</dd>
-              </div>
-              <div className="flex gap-1">
-                <dt className="font-bold text-destructive">status:</dt>
-                <dd>
-                  {failure.status ?? "(sem status)"}
-                  {failure.statusText ? ` ${failure.statusText}` : ""}
-                </dd>
-              </div>
-              <div className="flex gap-1">
-                <dt className="font-bold text-destructive">bucket:</dt>
-                <dd className="break-all">{failure.bucket}</dd>
-              </div>
-              <div className="flex gap-1">
-                <dt className="font-bold text-destructive">path:</dt>
-                <dd className="break-all">{failure.path}</dd>
-              </div>
-              <div className="flex gap-1">
-                <dt className="font-bold text-destructive">arquivo:</dt>
-                <dd className="break-all">
-                  {failure.fileName} · {failure.fileType || "(sem tipo)"} · {failure.fileSize} bytes
-                </dd>
-              </div>
-              <div className="flex gap-1">
-                <dt className="font-bold text-destructive">token:</dt>
-                <dd>
-                  {failure.hasToken ? "presente" : "ausente"} · uploadToSignedUrl{" "}
-                  {failure.methodAvailable ? "disponível" : "indisponível"}
-                </dd>
-              </div>
-
-              {failure.tokenTiming ? (
-                <div className="flex flex-col gap-1">
-                  <dt className="font-bold text-destructive">tempo do token:</dt>
-                  <dd>
-                    iat {failure.tokenTiming.iat ?? "(sem iat)"} · exp{" "}
-                    {failure.tokenTiming.exp ?? "(sem exp)"} · agora {failure.tokenTiming.now} · TTL{" "}
-                    {failure.tokenTiming.ttlSeconds ?? "?"}s · idade{" "}
-                    {failure.tokenTiming.ageSeconds ?? "?"}s · hash {failure.tokenTiming.hash}
-                  </dd>
-                  <dd className="break-all">
-                    claims: {failure.tokenTiming.payloadKeys.join(", ") || "(sem payload)"}
-                  </dd>
-                </div>
-              ) : null}
-              {failure.raw ? (
-                <div className="flex flex-col gap-1">
-                  <dt className="font-bold text-destructive">resposta bruta do Storage:</dt>
-                  <dd className="max-h-40 overflow-auto whitespace-pre-wrap break-all">{failure.raw}</dd>
-                </div>
-              ) : null}
-            </dl>
-          ) : null}
-        </div>
+        <p className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+          {errorMessage}
+        </p>
       ) : null}
 
       <div className="flex flex-wrap items-center gap-2">

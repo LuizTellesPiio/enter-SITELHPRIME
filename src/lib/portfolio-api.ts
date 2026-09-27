@@ -168,8 +168,6 @@ export interface RequestUploadResult {
   publicUrl?: string;
   error?: string;
   message?: string;
-  /** DIAGNÓSTICO TEMPORÁRIO — iat/exp/now medidos no backend. */
-  tokenDebug?: Record<string, unknown>;
 }
 
 const asText = (value: unknown): string | null =>
@@ -212,10 +210,6 @@ export const requestPortfolioUpload = async (
       token: raw.token,
       path: raw.path,
       publicUrl: asText(raw?.public_url) ?? undefined,
-      tokenDebug:
-        raw?.token_debug && typeof raw.token_debug === "object"
-          ? (raw.token_debug as Record<string, unknown>)
-          : undefined,
     };
   }
 
@@ -226,108 +220,11 @@ export const requestPortfolioUpload = async (
   };
 };
 
-/* ------------------------------------------------------------------ */
-/* DIAGNÓSTICO TEMPORÁRIO DO UPLOAD                                    */
-/* ------------------------------------------------------------------ */
-/* Bloco para descobrir a causa exata de falha no envio do .mp4.        */
-/* Remover quando o upload estiver estável.                             */
-/* ------------------------------------------------------------------ */
-
-export interface PortfolioUploadDiagnostics {
-  bucket: string;
-  path: string;
-  fileName: string;
-  fileType: string;
-  fileSize: number;
-  hasToken: boolean;
-  /** O método existe no cliente instalado? */
-  methodAvailable: boolean;
-  /** Status HTTP retornado pelo Storage, quando houver. */
-  status?: number | string;
-  statusText?: string;
-  errorName?: string;
-  errorMessage?: string;
-  /** Resposta bruta do Storage, quando disponível. */
-  raw?: string;
-  /** iat/exp/now do token efetivamente usado no upload. */
-  tokenTiming?: PortfolioTokenTiming;
-}
-
-export interface PortfolioTokenTiming {
-  iat: number | null;
-  exp: number | null;
-  now: number;
-  ttlSeconds: number | null;
-  ageSeconds: number | null;
-  /** Impressão digital do token (permite comparar sem expor o valor). */
-  hash: string;
-  payloadKeys: string[];
-}
-
-/** Decodifica SOMENTE o payload do JWT do token de upload (sem assinatura). */
-const decodeTokenPayload = (token: string): Record<string, unknown> | null => {
-  try {
-    const part = token.split(".")[1];
-    if (!part) return null;
-    const normalized = part.replace(/-/g, "+").replace(/_/g, "/");
-    const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
-    return JSON.parse(atob(padded)) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-};
-
-/** Impressão digital curta do token: compara sem expor o valor completo. */
-const tokenFingerprint = async (token: string): Promise<string> => {
-  try {
-    if (!globalThis.crypto?.subtle) return `len-${token.length}`;
-    const digest = await globalThis.crypto.subtle.digest(
-      "SHA-256",
-      new TextEncoder().encode(token),
-    );
-    return Array.from(new Uint8Array(digest))
-      .slice(0, 6)
-      .map((byte) => byte.toString(16).padStart(2, "0"))
-      .join("");
-  } catch {
-    return `len-${token.length}`;
-  }
-};
-
-export const describeTokenTiming = async (token: string): Promise<PortfolioTokenTiming> => {
-  const now = Math.floor(Date.now() / 1000);
-  const payload = decodeTokenPayload(token);
-  const iat = typeof payload?.iat === "number" ? payload.iat : null;
-  const exp = typeof payload?.exp === "number" ? payload.exp : null;
-
-  return {
-    iat,
-    exp,
-    now,
-    ttlSeconds: exp === null ? null : exp - now,
-    ageSeconds: iat === null ? null : now - iat,
-    hash: await tokenFingerprint(token),
-    payloadKeys: payload ? Object.keys(payload) : [],
-  };
-};
-
-const describeError = (error: unknown): { name?: string; message?: string; raw?: string } => {
-  if (!error || typeof error !== "object") {
-    return { name: typeof error, message: String(error) };
-  }
-
-  const value = error as Record<string, unknown>;
-  const name = typeof value.name === "string" ? value.name : undefined;
-  const message = typeof value.message === "string" ? value.message : undefined;
-
-  let raw: string | undefined;
-  try {
-    raw = JSON.stringify(value, (_key, item) => (typeof item === "bigint" ? String(item) : item));
-  } catch {
-    raw = undefined;
-  }
-
-  return { name, message, raw };
+/** Texto de erro do SDK, quando houver, para o log do console. */
+const errorText = (error: unknown): string => {
+  if (!error || typeof error !== "object") return String(error);
+  const message = (error as { message?: unknown }).message;
+  return typeof message === "string" && message ? message : "erro sem mensagem";
 };
 
 /** Tempo máximo de espera pelo envio dos bytes (evita travar indefinidamente). */
@@ -341,21 +238,7 @@ export const uploadPortfolioVideo = async (input: {
   path: string;
   token: string;
   file: File;
-}): Promise<{
-  ok: boolean;
-  message?: string;
-  diagnostics: PortfolioUploadDiagnostics;
-}> => {
-  const base: PortfolioUploadDiagnostics = {
-    bucket: PORTFOLIO_BUCKET,
-    path: input.path,
-    fileName: input.file.name,
-    fileType: input.file.type,
-    fileSize: input.file.size,
-    hasToken: Boolean(input.token),
-    methodAvailable: false,
-  };
-
+}): Promise<{ ok: boolean; message?: string }> => {
   let timer: number | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = window.setTimeout(() => reject(new Error("upload_timeout")), UPLOAD_TIMEOUT_MS);
@@ -365,36 +248,12 @@ export const uploadPortfolioVideo = async (input: {
     /* O envio assinado vive no cliente do bucket: storage.from(bucket). */
     const bucketClient = supabase.storage.from(PORTFOLIO_BUCKET);
     const uploadToSignedUrl = bucketClient.uploadToSignedUrl?.bind(bucketClient);
-    base.methodAvailable = typeof uploadToSignedUrl === "function";
 
-    /* DIAGNÓSTICO TEMPORÁRIO — tempo de vida do token que será enviado. */
-    base.tokenTiming = await describeTokenTiming(input.token);
-
-    console.groupCollapsed("[portfolio] upload assinado");
-    console.log("bucket:", base.bucket);
-    console.log("path:", base.path);
-    console.log("file.name:", base.fileName);
-    console.log("file.type:", base.fileType);
-    console.log("file.size:", base.fileSize);
-    console.log("token presente:", base.hasToken);
-    console.log("uploadToSignedUrl disponível:", base.methodAvailable);
-    console.log("token iat/exp/now (epoch s):", {
-      iat: base.tokenTiming.iat,
-      exp: base.tokenTiming.exp,
-      now: base.tokenTiming.now,
-      ttlRestante: base.tokenTiming.ttlSeconds,
-      idadeDoToken: base.tokenTiming.ageSeconds,
-      fingerprint: base.tokenTiming.hash,
-      claims: base.tokenTiming.payloadKeys,
-    });
-
-    if (!uploadToSignedUrl) {
-      console.warn("uploadToSignedUrl indisponível neste cliente de Storage.");
-      console.groupEnd();
+    if (typeof uploadToSignedUrl !== "function") {
+      console.error("uploadPortfolioVideo: upload assinado indisponível neste cliente de Storage");
       return {
         ok: false,
-        message: "Este cliente de Storage não suporta upload assinado.",
-        diagnostics: { ...base, errorName: "TypeError" },
+        message: "Não foi possível enviar o vídeo agora. Recarregue a página e tente novamente.",
       };
     }
 
@@ -406,45 +265,25 @@ export const uploadPortfolioVideo = async (input: {
     ]);
 
     if (result.error) {
-      const described = describeError(result.error);
-      const diagnostics: PortfolioUploadDiagnostics = {
-        ...base,
-        status: result.error.status ?? result.error.statusCode,
-        statusText: typeof result.error.statusText === "string" ? result.error.statusText : undefined,
-        errorName: described.name,
-        errorMessage: described.message,
-        raw: described.raw,
-      };
-      console.error("[portfolio] upload assinado FALHOU", diagnostics);
-      console.groupEnd();
+      console.error("uploadPortfolioVideo: envio recusado pelo Storage", errorText(result.error));
       return {
         ok: false,
-        message: described.message ?? "Falha ao enviar o vídeo. Tente novamente.",
-        diagnostics,
+        message: "Não foi possível enviar o vídeo. Tente novamente em instantes.",
       };
     }
 
-    console.log("[portfolio] upload assinado OK", result.data);
-    console.groupEnd();
-    return { ok: true, diagnostics: base };
+    return { ok: true };
   } catch (err) {
-    const described = describeError(err);
     const isTimeout = err instanceof Error && err.message === "upload_timeout";
-    const diagnostics: PortfolioUploadDiagnostics = {
-      ...base,
-      status: isTimeout ? "timeout" : undefined,
-      errorName: described.name,
-      errorMessage: described.message,
-      raw: described.raw,
-    };
-    console.error("[portfolio] upload assinado lançou exceção", diagnostics);
-    console.groupEnd();
+    console.error(
+      "uploadPortfolioVideo: falha no envio",
+      isTimeout ? "tempo excedido" : errorText(err),
+    );
     return {
       ok: false,
       message: isTimeout
         ? UPLOAD_TIMEOUT_MESSAGE
-        : described.message ?? "Não foi possível enviar o vídeo. Tente novamente.",
-      diagnostics,
+        : "Não foi possível enviar o vídeo. Verifique sua conexão e tente novamente.",
     };
   } finally {
     if (timer !== undefined) window.clearTimeout(timer);

@@ -48,66 +48,6 @@ const MAX_FILE_BYTES = 500 * 1024 * 1024;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/* ------------------------------------------------------------------ */
-/* DIAGNÓSTICO TEMPORÁRIO — tempo de vida do token de upload            */
-/* (remover quando o upload estiver estável)                            */
-/* ------------------------------------------------------------------ */
-
-/** Decodifica SOMENTE o payload do JWT (sem assinatura, sem segredo). */
-const decodeJwtPayload = (token: string): Record<string, unknown> | null => {
-  try {
-    const part = token.split(".")[1];
-    if (!part) return null;
-    const normalized = part.replace(/-/g, "+").replace(/_/g, "/");
-    const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
-    return JSON.parse(atob(padded)) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-};
-
-/** Relógio do serviço que VALIDA o upload, via header Date da resposta. */
-const probeValidatorClock = async (
-  baseUrl: string,
-): Promise<{ date: string | null; epoch: number | null }> => {
-  try {
-    const response = await fetch(
-      `${baseUrl}/storage/v1/object/upload/sign/${BUCKET}/__diagnostico__/probe.mp4?token=invalido`,
-      { method: "PUT" },
-    );
-    const date = response.headers.get("date");
-    const parsed = date ? new Date(date).getTime() : Number.NaN;
-    return { date, epoch: Number.isFinite(parsed) ? Math.floor(parsed / 1000) : null };
-  } catch (err) {
-    console.error("portfolio-upload: falha ao medir relogio do Storage", err);
-    return { date: null, epoch: null };
-  }
-};
-
-const describeTokenTiming = async (
-  token: string,
-  baseUrl: string,
-): Promise<Record<string, unknown>> => {
-  const now = Math.floor(Date.now() / 1000);
-  const payload = decodeJwtPayload(token);
-  const iat = typeof payload?.iat === "number" ? payload.iat : null;
-  const exp = typeof payload?.exp === "number" ? payload.exp : null;
-  const validator = await probeValidatorClock(baseUrl);
-
-  return {
-    iat,
-    exp,
-    now,
-    ttlSeconds: exp === null ? null : exp - now,
-    ageSeconds: iat === null ? null : now - iat,
-    payloadKeys: payload ? Object.keys(payload) : [],
-    validatorDateHeader: validator.date,
-    validatorEpoch: validator.epoch,
-    validatorSkewSeconds: validator.epoch === null ? null : validator.epoch - now,
-  };
-};
-
-
 /** Tipos de arquivo aceitos por tipo de projeto. */
 const KINDS_BY_TYPE: Record<string, string[]> = {
   "antes-depois": ["antes", "depois"],
@@ -210,18 +150,6 @@ Deno.serve(async (req) => {
     .eq("id", projectId)
     .maybeSingle();
 
-  console.log("portfolio-upload: projeto selecionado", {
-    projectId,
-    seq: project?.seq ?? null,
-    slug: project?.slug ?? null,
-    type: project?.type ?? null,
-    lookupOk: !projectError && Boolean(project),
-    lookupError: projectError?.message ?? null,
-    kind,
-    fileSize,
-    fileType,
-  });
-
   if (projectError) {
     console.error("portfolio-upload: falha ao ler projeto", projectError.message);
     return json(
@@ -236,36 +164,18 @@ Deno.serve(async (req) => {
 
   const target = buildPath(String(project.type), String(project.slug), kind);
   if (!target.ok) {
-    console.warn("portfolio-upload: tipo de arquivo invalido", {
-      slug: project.slug,
-      type: project.type,
-      kind,
-    });
+    console.warn("portfolio-upload: tipo de arquivo invalido", { projectId, kind });
     return json({ error: "invalid_kind", message: target.message }, 400);
   }
-
-  console.log("portfolio-upload: path gerado", {
-    bucket: BUCKET,
-    slug: project.slug,
-    type: project.type,
-    kind,
-    path: target.path,
-  });
 
   /* Re-upload: remove o objeto anterior do caminho oficial (se existir). */
   const removed = await supabase.storage.from(BUCKET).remove([target.path]);
 
-  const { data, error } = await supabase.storage.from(BUCKET).createSignedUploadUrl(target.path);
+  if (removed.error) {
+    console.error("portfolio-upload: falha ao remover arquivo anterior", removed.error.message);
+  }
 
-  console.log("portfolio-upload: createSignedUploadUrl", {
-    path: target.path,
-    ok: !error && Boolean(data?.token),
-    tokenEmitido: Boolean(data?.token),
-    signedPath: data?.path ?? null,
-    erro: error?.message ?? null,
-    removeAnteriorOk: !removed.error,
-    removeAnteriorErro: removed.error?.message ?? null,
-  });
+  const { data, error } = await supabase.storage.from(BUCKET).createSignedUploadUrl(target.path);
 
   if (error || !data?.token) {
     console.error("portfolio-upload: falha ao criar URL assinada", error?.message);
@@ -275,14 +185,9 @@ Deno.serve(async (req) => {
     );
   }
 
-  const baseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  console.log("portfolio-upload: url assinada emitida", { projectId, kind });
 
-  /* DIAGNÓSTICO TEMPORÁRIO — iat/exp/now/TTL do token recém-emitido. */
-  const tokenTiming = await describeTokenTiming(data.token, baseUrl);
-  console.log("portfolio-upload: timing do token", {
-    path: target.path,
-    ...tokenTiming,
-  });
+  const baseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 
   return json({
     ok: true,
@@ -290,7 +195,5 @@ Deno.serve(async (req) => {
     path: data.path,
     token: data.token,
     public_url: `${baseUrl}/storage/v1/object/public/${BUCKET}/${target.path}`,
-    /* Remover quando o upload estiver estável. */
-    token_debug: tokenTiming,
   });
 });
