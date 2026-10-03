@@ -78,6 +78,7 @@ Deno.serve(async (req) => {
     case "awarded":
       return json({
         state: "premiado",
+        no_prize: false,
         code: row.participation_code,
         first_name: firstNameOf(row.customer_name),
         prize_id: row.prize_id,
@@ -85,9 +86,23 @@ Deno.serve(async (req) => {
         prize_short_name: row.prize_short_name,
         position: row.prize_position,
       });
+    case "no_prize":
+      /* Resultado sem premio: a participacao foi consumida (sem estoque, sem
+         entrega) e nao existe novo giro. */
+      return json({
+        state: "no_prize",
+        no_prize: true,
+        code: row.participation_code,
+        first_name: firstNameOf(row.customer_name),
+        prize_id: null,
+        prize_name: null,
+        prize_short_name: null,
+        position: null,
+      });
     case "already_spun":
       return json({
         state: "already_spun",
+        no_prize: row.prize_id === null,
         code: row.participation_code,
         first_name: firstNameOf(row.customer_name),
         prize_id: row.prize_id,

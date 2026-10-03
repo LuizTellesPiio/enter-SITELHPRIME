@@ -53,6 +53,9 @@ const publicData = (row: ParticipationRow) => ({
   first_name: firstNameOf(row.customer_name),
   prize_id: row.result_prize_id ?? null,
   prize_name: row.result_prize_name_snapshot ?? null,
+  /* Participação já girada sem prêmio: consumida, sem entrega e sem novo giro. */
+  no_prize:
+    row.result_prize_id === null && (row.status === "PREMIADO" || row.status === "ENTREGUE"),
 });
 
 Deno.serve(async (req) => {

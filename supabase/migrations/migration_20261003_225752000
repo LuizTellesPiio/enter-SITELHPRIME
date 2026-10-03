@@ -1,0 +1,13 @@
+insert into public.participations (code, customer_name, customer_phone, budget_reference, status, released_at, admin_notes)
+values
+ ('LH-PROB01','Probe 01','22900000001','teste temporario distribuicao','LIBERADO',now(),'TESTE TEMPORARIO — remover'),
+ ('LH-PROB02','Probe 02','22900000002','teste temporario distribuicao','LIBERADO',now(),'TESTE TEMPORARIO — remover'),
+ ('LH-PROB03','Probe 03','22900000003','teste temporario distribuicao','LIBERADO',now(),'TESTE TEMPORARIO — remover'),
+ ('LH-PROB04','Probe 04','22900000004','teste temporario distribuicao','LIBERADO',now(),'TESTE TEMPORARIO — remover'),
+ ('LH-PROB05','Probe 05','22900000005','teste temporario distribuicao','LIBERADO',now(),'TESTE TEMPORARIO — remover'),
+ ('LH-PROB06','Probe 06','22900000006','teste temporario distribuicao','LIBERADO',now(),'TESTE TEMPORARIO — remover'),
+ ('LH-PROB07','Probe 07','22900000007','teste temporario distribuicao','LIBERADO',now(),'TESTE TEMPORARIO — remover'),
+ ('LH-PROB08','Probe 08','22900000008','teste temporario distribuicao','LIBERADO',now(),'TESTE TEMPORARIO — remover'),
+ ('LH-PROB09','Probe 09','22900000009','teste temporario distribuicao','LIBERADO',now(),'TESTE TEMPORARIO — remover'),
+ ('LH-PROB10','Probe 10','22900000010','teste temporario distribuicao','LIBERADO',now(),'TESTE TEMPORARIO — remover')
+on conflict (code) do nothing;

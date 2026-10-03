@@ -59,8 +59,14 @@ const STATUS_META: Record<ParticipationStatusValue, { label: string; className: 
   CANCELADO: { label: "Cancelado", className: "border-destructive/30 bg-destructive/10 text-destructive" },
 };
 
-const StatusBadge = ({ status }: { status: ParticipationStatusValue }) => {
-  const meta = STATUS_META[status];
+/** Participação já girada que terminou sem prêmio: consumida, sem estoque e sem entrega. */
+const isNoPrizeRecord = (record: ParticipationRecord): boolean =>
+  !record.result_prize_id && (record.status === "PREMIADO" || record.status === "ENTREGUE");
+
+const StatusBadge = ({ status, noPrize }: { status: ParticipationStatusValue; noPrize: boolean }) => {
+  const meta = noPrize
+    ? { label: "Sem prêmio", className: "border-border bg-muted text-muted-foreground" }
+    : STATUS_META[status];
   return (
     <span
       className={cn(
@@ -247,6 +253,7 @@ export const ParticipacoesPanel = () => {
               record.customer_phone,
               buildClientMessage({ name: record.customer_name, code: record.code, link }),
             );
+            const noPrize = isNoPrizeRecord(record);
 
             return (
               <article
@@ -260,7 +267,7 @@ export const ParticipacoesPanel = () => {
                       {record.code}
                     </p>
                   </div>
-                  <StatusBadge status={record.status} />
+                  <StatusBadge status={record.status} noPrize={noPrize} />
                 </div>
 
                 <div className="grid gap-1.5 sm:grid-cols-2">
@@ -273,7 +280,9 @@ export const ParticipacoesPanel = () => {
                       record.status === "CANCELADO" ? record.cancelled_at : record.released_at,
                     )}
                   />
-                  {record.result_prize_name_snapshot ? (
+                  {noPrize ? (
+                    <MetaItem label="Resultado" value="Sem prêmio (Não foi dessa vez)" />
+                  ) : record.result_prize_name_snapshot ? (
                     <MetaItem label="Resultado" value={record.result_prize_name_snapshot} />
                   ) : null}
                   {record.used_at ? <MetaItem label="Giro em" value={formatDateTime(record.used_at)} /> : null}
@@ -316,7 +325,7 @@ export const ParticipacoesPanel = () => {
                     </Button>
                   ) : null}
 
-                  {record.status === "PREMIADO" ? (
+                  {record.status === "PREMIADO" && !noPrize ? (
                     <Button
                       type="button"
                       variant="secondary"

@@ -1,0 +1,3 @@
+insert into public.participations (code, customer_name, customer_phone, budget_reference, status, released_at, admin_notes)
+values ('LH-PROB23','Probe 23','22900000023','teste temporario concorrencia','LIBERADO',now(),'TESTE TEMPORARIO — remover')
+on conflict (code) do nothing;

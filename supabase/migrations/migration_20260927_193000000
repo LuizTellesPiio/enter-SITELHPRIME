@@ -1,0 +1,230 @@
+-- LH PRIME — Cliente Premiado: resultado "sem prêmio" + distribuição oficial.
+--
+-- 1) Novo registro de configuração com a flag is_no_prize (sem estoque, sem entrega).
+-- 2) Distribuição oficial da campanha (soma exata: 100).
+-- 3) award_participation passa a sortear também o "sem prêmio", consumindo a
+--    participação e registrando o resultado (result_prize_id nulo).
+-- 4) deliver_participation recusa participação sem prêmio.
+-- 5) save_prize_config nunca grava estoque/concedidos no registro sem prêmio.
+--
+-- Nenhuma participação existente é alterada.
+
+alter table public.prizes add column if not exists is_no_prize boolean not null default false;
+
+insert into public.prizes (id, position, name, short_name, enabled, quantity, granted, weight, is_no_prize)
+values ('sem-premio', 6, 'Não foi dessa vez', 'Não foi dessa vez', true, 0, 0, 40, true)
+on conflict (id) do update set is_no_prize = true, enabled = true, weight = 40;
+
+update public.prizes set weight = 2  where id = 'tinta-18l';
+update public.prizes set weight = 4  where id = 'coralit-36';
+update public.prizes set weight = 6  where id = 'kit-churrasco';
+update public.prizes set weight = 8  where id = 'vale-50';
+update public.prizes set weight = 15 where id = 'vale-20';
+update public.prizes set weight = 25 where id = 'vale-10';
+update public.prizes set weight = 40 where id = 'sem-premio';
+
+create or replace function public.award_participation(p_code text)
+returns table (
+  outcome text,
+  prize_id text,
+  prize_name text,
+  prize_short_name text,
+  prize_position integer,
+  customer_name text,
+  participation_code text
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row public.participations%rowtype;
+  v_prize public.prizes%rowtype;
+  v_total numeric;
+  v_roll numeric;
+  v_cum numeric := 0;
+  v_code text := upper(trim(coalesce(p_code, '')));
+begin
+  if not exists (
+    select 1 from public.campaign_config c where c.id = true and c.prizes_configured
+  ) then
+    return query select 'distribution_not_configured'::text, null::text, null::text, null::text, null::integer, null::text, null::text;
+    return;
+  end if;
+
+  -- claim atomico: somente um giro por participacao LIBERADO
+  update public.participations p
+     set status = 'PREMIADO', used_at = now()
+   where p.code = v_code and p.status = 'LIBERADO'
+  returning * into v_row;
+
+  if v_row.id is null then
+    select * into v_row from public.participations p where p.code = v_code;
+
+    if v_row.id is null then
+      return query select 'not_found'::text, null::text, null::text, null::text, null::integer, null::text, null::text;
+      return;
+    end if;
+
+    -- Ja girou (com ou sem premio): devolve o MESMO resultado, nunca um novo giro.
+    if v_row.status in ('PREMIADO','ENTREGUE') and v_row.used_at is not null then
+      return query select
+        'already_spun'::text,
+        v_row.result_prize_id,
+        v_row.result_prize_name_snapshot,
+        (select p.short_name from public.prizes p where p.id = v_row.result_prize_id),
+        (select p.position from public.prizes p where p.id = v_row.result_prize_id),
+        v_row.customer_name,
+        v_row.code;
+      return;
+    end if;
+
+    if v_row.status = 'CANCELADO' then
+      return query select 'cancelled'::text, null::text, null::text, null::text, null::integer, null::text, null::text;
+      return;
+    end if;
+
+    return query select 'not_available'::text, null::text, null::text, null::text, null::integer, null::text, null::text;
+    return;
+  end if;
+
+  -- serializa concorrencia (estoque dos premios + resultado sem premio)
+  perform 1 from public.prizes p
+   where p.enabled and (p.is_no_prize or p.granted < p.quantity)
+   for update;
+
+  select coalesce(sum(p.weight), 0) into v_total
+    from public.prizes p
+   where p.enabled and (p.is_no_prize or p.granted < p.quantity);
+
+  if v_total <= 0 then
+    update public.participations set status = 'LIBERADO', used_at = null where id = v_row.id;
+    return query select 'no_prizes_available'::text, null::text, null::text, null::text, null::integer, null::text, null::text;
+    return;
+  end if;
+
+  v_roll := random() * v_total;
+
+  for v_prize in
+    select p.* from public.prizes p
+     where p.enabled and (p.is_no_prize or p.granted < p.quantity)
+     order by p.position
+  loop
+    v_cum := v_cum + v_prize.weight;
+    exit when v_cum >= v_roll;
+  end loop;
+
+  -- Sem premio: consome a participacao, nao movimenta estoque e nao gera entrega.
+  if v_prize.is_no_prize then
+    update public.participations
+       set result_prize_id = null,
+           result_prize_name_snapshot = v_prize.name
+     where id = v_row.id;
+
+    return query select
+      'no_prize'::text, null::text, null::text, null::text, null::integer, v_row.customer_name, v_row.code;
+    return;
+  end if;
+
+  -- baixa de estoque atomica: granted = granted + 1
+  update public.prizes p
+     set granted = p.granted + 1, updated_at = now()
+   where p.id = v_prize.id and p.enabled and not p.is_no_prize and p.granted < p.quantity
+  returning * into v_prize;
+
+  if v_prize.id is null then
+    update public.participations set status = 'LIBERADO', used_at = null where id = v_row.id;
+    return query select 'retry'::text, null::text, null::text, null::text, null::integer, null::text, null::text;
+    return;
+  end if;
+
+  update public.participations
+     set result_prize_id = v_prize.id,
+         result_prize_name_snapshot = v_prize.name
+   where id = v_row.id;
+
+  return query select
+    'awarded'::text,
+    v_prize.id,
+    v_prize.name,
+    v_prize.short_name,
+    v_prize.position,
+    v_row.customer_name,
+    v_row.code;
+end;
+$$;
+
+create or replace function public.deliver_participation(p_code text)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row public.participations%rowtype;
+  v_code text := upper(trim(coalesce(p_code, '')));
+begin
+  select * into v_row from public.participations p where p.code = v_code;
+  if v_row.id is null then return 'not_found'; end if;
+  if v_row.status = 'ENTREGUE' then return 'already_delivered'; end if;
+  if v_row.status <> 'PREMIADO' then return 'invalid_status'; end if;
+  -- Resultado sem premio nao tem entrega.
+  if v_row.result_prize_id is null then return 'no_prize_result'; end if;
+
+  update public.participations
+     set status = 'ENTREGUE', delivered_at = now()
+   where id = v_row.id;
+
+  return 'delivered';
+end;
+$$;
+
+create or replace function public.save_prize_config(p_prizes jsonb)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  item jsonb;
+  v_weight numeric;
+  v_quantity integer;
+  v_granted integer;
+  v_enabled boolean;
+begin
+  if p_prizes is null or jsonb_typeof(p_prizes) <> 'array' then
+    raise exception 'invalid_payload';
+  end if;
+
+  for item in select * from jsonb_array_elements(p_prizes) loop
+    v_weight := coalesce((item->>'weight')::numeric, 1);
+    v_quantity := coalesce((item->>'quantity')::integer, 0);
+    v_granted := coalesce((item->>'granted')::integer, 0);
+    v_enabled := coalesce((item->>'enabled')::boolean, true);
+
+    if v_weight <= 0 then raise exception 'weight_invalid'; end if;
+    if v_quantity < 0 or v_granted < 0 then raise exception 'quantity_invalid'; end if;
+
+    -- O registro sem premio nunca recebe estoque nem concedidos.
+    update public.prizes p
+       set enabled = v_enabled,
+           weight = v_weight,
+           quantity = case when p.is_no_prize then p.quantity else v_quantity end,
+           granted = case when p.is_no_prize then p.granted else v_granted end,
+           updated_at = now()
+     where p.id = item->>'id';
+  end loop;
+
+  update public.campaign_config
+     set prizes_configured = true, updated_at = now()
+   where id = true;
+end;
+$$;
+
+revoke all on function public.award_participation(text) from public, anon, authenticated;
+revoke all on function public.deliver_participation(text) from public, anon, authenticated;
+revoke all on function public.save_prize_config(jsonb) from public, anon, authenticated;
+
+grant execute on function public.award_participation(text) to service_role;
+grant execute on function public.deliver_participation(text) to service_role;
+grant execute on function public.save_prize_config(jsonb) to service_role;

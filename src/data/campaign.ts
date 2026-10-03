@@ -91,6 +91,66 @@ export const enabledPrizes = (prizes: CampaignPrize[]): CampaignPrize[] =>
   prizes.filter((p) => p.enabled && p.available);
 
 /* ------------------------------------------------------------------ */
+/* Resultado sem prêmio e desenho da roleta                            */
+/* ------------------------------------------------------------------ */
+
+/** Mesmo identificador do resultado sem prêmio usado pelo backend. */
+export const NO_PRIZE_ID = "sem-premio";
+
+export const NO_PRIZE_LABEL = "Não foi dessa vez";
+
+/** Texto do resultado sem prêmio exibido ao cliente. */
+export const NO_PRIZE_HEADLINE = "Não foi dessa vez 😅";
+
+export const NO_PRIZE_MESSAGE =
+  "Mas obrigado por confiar na LH Prime. Sua participação já fez parte do Cliente Premiado. 💚";
+
+/**
+ * Layout visual da roleta: 12 segmentos, com repetições e três slots sem prêmio
+ * distribuídos de forma que nenhum fique ao lado do outro.
+ *
+ * IMPORTANTE: este layout é apenas apresentação. Quantidade e tamanho dos
+ * segmentos NÃO definem probabilidade — o backend continua sorteando pelos
+ * pesos configurados no painel e o frontend só encontra um segmento
+ * correspondente ao resultado recebido.
+ */
+export const WHEEL_LAYOUT: string[] = [
+  "tinta-18l",
+  "vale-10",
+  "kit-churrasco",
+  NO_PRIZE_ID,
+  "coralit-36",
+  "vale-20",
+  "vale-10",
+  NO_PRIZE_ID,
+  "vale-50",
+  "vale-10",
+  "vale-20",
+  NO_PRIZE_ID,
+];
+
+export interface WheelSegment {
+  /** Chave de renderização (um prêmio pode ter mais de um segmento). */
+  key: string;
+  /** Prêmio correspondente no backend (ou NO_PRIZE_ID). */
+  prizeId: string;
+  /** Texto do segmento. */
+  label: string;
+  isNoPrize: boolean;
+}
+
+/** Segmentos exibidos na roleta, na ordem do layout. */
+export const buildWheelSegments = (prizes: CampaignPrize[]): WheelSegment[] =>
+  WHEEL_LAYOUT.flatMap((id, index): WheelSegment[] => {
+    if (id === NO_PRIZE_ID) {
+      return [{ key: `no-prize-${index}`, prizeId: NO_PRIZE_ID, label: NO_PRIZE_LABEL, isNoPrize: true }];
+    }
+    const prize = prizes.find((item) => item.id === id);
+    if (!prize) return [];
+    return [{ key: `${id}-${index}`, prizeId: id, label: prize.shortName, isNoPrize: false }];
+  });
+
+/* ------------------------------------------------------------------ */
 /* Estados da experiência (apenas de interface; nunca segurança)       */
 /* ------------------------------------------------------------------ */
 
@@ -110,6 +170,8 @@ export interface Participation {
   name: string | null;
   /** Resultado registrado — vem sempre do backend, nunca decidido aqui. */
   result: string | null;
+  /** Resultado sem prêmio: participação consumida, sem estoque e sem entrega. */
+  noPrize: boolean;
   /** Mensagem específica exibida para o cliente no estado atual. */
   message?: string | null;
 }

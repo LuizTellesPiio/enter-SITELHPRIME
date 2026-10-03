@@ -24,8 +24,11 @@ import { ImagePlaceholder } from "@/components/site/ImagePlaceholder";
 import { ContactForm } from "@/components/site/ContactForm";
 import { RouletteWheel } from "@/components/site/RouletteWheel";
 import {
+  buildWheelSegments,
   CAMPAIGN_PRIZES,
   enabledPrizes,
+  NO_PRIZE_HEADLINE,
+  NO_PRIZE_MESSAGE,
   type Participation,
   type SpinPhase,
 } from "@/data/campaign";
@@ -406,27 +409,22 @@ const WonPanel = ({
       <span className="flex size-12 items-center justify-center rounded-full bg-emerald text-white shadow-glow">
         <Sparkles className="size-6" />
       </span>
-      <p className="font-display text-lg font-bold text-white">
-        Parabéns{participation.name ? `, ${participation.name}` : ""}!
+      <p className="font-display text-xl font-bold text-white">
+        Parabéns{participation.name ? `, ${participation.name}` : ""}! 🎉
       </p>
-      <p className="text-sm text-on-dark-muted">Sua surpresa foi revelada.</p>
-      <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald">
-        Você ganhou
+      <p className="max-w-md text-sm leading-relaxed text-on-dark-muted sm:text-base">
+        Você ganhou{" "}
+        <span className="font-display text-lg font-extrabold text-emerald">{prizeName}</span> no
+        Cliente Premiado LH Prime.
       </p>
-      <p className="font-display text-2xl font-extrabold text-emerald lg:text-3xl">
-        {prizeName}
-      </p>
-      <p className="text-sm text-on-dark-muted">
-        Seu prêmio já está registrado na LH Prime.
+      <p className="max-w-md text-sm leading-relaxed text-on-dark-muted">
+        Seu prêmio já está registrado. Nossa equipe entrará em contato para combinar a entrega.
       </p>
       {code ? (
         <p className="rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-xs font-semibold text-on-dark">
           Código da participação: {code}
         </p>
       ) : null}
-      <p className="text-sm text-on-dark-muted">
-        Agora é só falar com nossa equipe para combinar o recebimento.
-      </p>
       <Button
         asChild
         variant="whatsapp"
@@ -442,6 +440,22 @@ const WonPanel = ({
     </div>
   );
 };
+
+/**
+ * Resultado sem prêmio — a participação foi consumida e não existe novo giro.
+ * Sem tom negativo: apenas o agradecimento da campanha.
+ */
+const NoPrizePanel = () => (
+  <div className="flex w-full animate-pop-in flex-col items-center gap-3 rounded-3xl border border-white/12 bg-white/5 p-6 text-center backdrop-blur-sm lg:p-8">
+    <span className="flex size-12 items-center justify-center rounded-full bg-white/10 text-emerald">
+      <Sparkles className="size-6" />
+    </span>
+    <p className="font-display text-xl font-bold text-white">{NO_PRIZE_HEADLINE}</p>
+    <p className="max-w-md text-sm leading-relaxed text-on-dark-muted sm:text-base">
+      {NO_PRIZE_MESSAGE}
+    </p>
+  </div>
+);
 
 /** Participação liberada e ainda não girada. */
 const LiberadaPanel = ({ name }: { name: string | null }) => (
@@ -511,7 +525,6 @@ const SecondAccessPanel = ({
 };
 
 const RoletaSection = ({
-  prizes,
   participation,
   spinPhase,
   targetIndex,
@@ -520,7 +533,6 @@ const RoletaSection = ({
   onSpin,
   onSpinComplete,
 }: {
-  prizes: ReturnType<typeof enabledPrizes>;
   participation: Participation;
   spinPhase: SpinPhase;
   targetIndex: number | null;
@@ -529,10 +541,13 @@ const RoletaSection = ({
   onSpin: () => void;
   onSpinComplete: () => void;
 }) => {
+  /* O nome do prêmio vem do backend; o segmento só apoia a apresentação. */
+  const segment = targetIndex != null ? WHEEL_SEGMENTS[targetIndex] : undefined;
   const prizeName =
-    targetIndex != null && prizes[targetIndex]
-      ? prizes[targetIndex].name
-      : participation.result ?? "";
+    participation.result ??
+    (segment && !segment.isNoPrize
+      ? PRIZES.find((prize) => prize.id === segment.prizeId)?.name ?? segment.label
+      : "");
 
   return (
     <section
@@ -551,7 +566,7 @@ const RoletaSection = ({
         />
 
         <RouletteWheel
-          prizes={prizes}
+          segments={WHEEL_SEGMENTS}
           locked={wheelLocked}
           spinning={spinPhase === "spinning"}
           revealed={spinPhase === "won"}
@@ -576,10 +591,14 @@ const RoletaSection = ({
           <StatusMessage participation={participation} />
         ) : null}
 
-        {spinPhase === "won" && participation.status === "used" ? (
-          <SecondAccessPanel participation={participation} prizeName={prizeName} />
-        ) : spinPhase === "won" ? (
-          <WonPanel participation={participation} prizeName={prizeName} />
+        {spinPhase === "won" ? (
+          participation.noPrize ? (
+            <NoPrizePanel />
+          ) : participation.status === "used" ? (
+            <SecondAccessPanel participation={participation} prizeName={prizeName} />
+          ) : (
+            <WonPanel participation={participation} prizeName={prizeName} />
+          )
         ) : null}
       </div>
     </section>
@@ -706,20 +725,21 @@ const CampaignFooter = ({ link }: { link: string }) => (
 /* Página                                                              */
 /* ------------------------------------------------------------------ */
 
-/** Converte o prêmio devolvido pelo backend no índice desenhado na roleta. */
-const prizeIndex = (id: string | null, position: number | null): number | null => {
-  if (id) {
-    const index = CAMPAIGN_PRIZES.findIndex((prize) => prize.id === id);
-    if (index >= 0) return index;
+/** Prêmios da campanha e segmentos visuais — estáticos (só apresentação). */
+const PRIZES = enabledPrizes(CAMPAIGN_PRIZES);
+const WHEEL_SEGMENTS = buildWheelSegments(PRIZES);
+
+/**
+ * Converte o resultado recebido do backend no segmento visual onde a roleta
+ * deve parar. Sem prêmio (ou prêmio desconhecido) cai em um slot sem prêmio.
+ */
+const segmentIndexFor = (prizeId: string | null, noPrize: boolean): number | null => {
+  if (noPrize || !prizeId) {
+    const index = WHEEL_SEGMENTS.findIndex((segment) => segment.isNoPrize);
+    return index >= 0 ? index : null;
   }
-  if (
-    typeof position === "number" &&
-    position >= 0 &&
-    position < CAMPAIGN_PRIZES.length
-  ) {
-    return position;
-  }
-  return null;
+  const index = WHEEL_SEGMENTS.findIndex((segment) => segment.prizeId === prizeId);
+  return index >= 0 ? index : null;
 };
 
 const ClientePremiado = () => {
@@ -731,6 +751,7 @@ const ClientePremiado = () => {
     code: null,
     name: null,
     result: null,
+    noPrize: false,
     message: null,
   });
   const [spinPhase, setSpinPhase] = useState<SpinPhase>("idle");
@@ -738,7 +759,6 @@ const ClientePremiado = () => {
   const [codeDialogOpen, setCodeDialogOpen] = useState(false);
   const [codeInput, setCodeInput] = useState("");
 
-  const prizes = enabledPrizes(CAMPAIGN_PRIZES);
   const wheelLocked = participation.status !== "valid";
 
   /**
@@ -753,7 +773,7 @@ const ClientePremiado = () => {
     setCodeInput(code);
     setSpinPhase("idle");
     setTargetIndex(null);
-    setParticipation({ status: "validating", code, name: null, result: null, message: null });
+    setParticipation({ status: "validating", code, name: null, result: null, noPrize: false, message: null });
 
     const result = await validateParticipation(code);
 
@@ -763,6 +783,7 @@ const ClientePremiado = () => {
         code,
         name: null,
         result: null,
+        noPrize: false,
         message:
           result.message ??
           "Não foi possível validar sua participação agora. Tente novamente em instantes.",
@@ -776,6 +797,7 @@ const ClientePremiado = () => {
         code,
         name: null,
         result: null,
+        noPrize: false,
         message: "Código não encontrado. Confira o código que a LH Prime enviou para você.",
       });
       return;
@@ -787,6 +809,7 @@ const ClientePremiado = () => {
         code,
         name: result.firstName ?? null,
         result: null,
+        noPrize: false,
         message: "Esta participação foi cancelada. Fale com a LH Prime para mais informações.",
       });
       return;
@@ -799,6 +822,7 @@ const ClientePremiado = () => {
           code,
           name: result.firstName ?? null,
           result: null,
+          noPrize: false,
           message:
             "Sua participação está confirmada, mas a roleta ainda não foi liberada pela LH Prime. Volte em breve com o mesmo link.",
         });
@@ -809,23 +833,27 @@ const ClientePremiado = () => {
         code,
         name: result.firstName ?? null,
         result: null,
+        noPrize: false,
         message: null,
       });
       return;
     }
 
     // premiado ou entregue — resultado já registrado no backend, sem novo giro
+    const noPrize = result.noPrize === true || !result.prizeId;
     setParticipation({
       status: "used",
       code,
       name: result.firstName ?? null,
-      result: result.prizeName ?? null,
-      message:
-        result.state === "entregue"
+      result: noPrize ? null : result.prizeName ?? null,
+      noPrize,
+      message: noPrize
+        ? null
+        : result.state === "entregue"
           ? "Seu prêmio já consta como entregue pela LH Prime."
           : "Este código já foi utilizado e o resultado está registrado.",
     });
-    setTargetIndex(prizeIndex(result.prizeId ?? null, null));
+    setTargetIndex(segmentIndexFor(result.prizeId ?? null, noPrize));
     setSpinPhase("won");
   }, []);
 
@@ -856,12 +884,28 @@ const ClientePremiado = () => {
       return;
     }
 
+    // Resultado sem prêmio: participação consumida, sem estoque, sem entrega
+    // e sem novo giro. A roleta só representa o slot "Não foi dessa vez".
+    if (outcome.noPrize === true || outcome.state === "no_prize") {
+      setParticipation((prev) => ({
+        ...prev,
+        status: "used",
+        result: null,
+        noPrize: true,
+        name: outcome.firstName ?? prev.name,
+        message: null,
+      }));
+      setTargetIndex(segmentIndexFor(null, true));
+      return;
+    }
+
     setParticipation((prev) => ({
       ...prev,
       result: outcome.prizeName ?? null,
+      noPrize: false,
       name: outcome.firstName ?? prev.name,
     }));
-    setTargetIndex(prizeIndex(outcome.prizeId ?? null, outcome.position ?? null));
+    setTargetIndex(segmentIndexFor(outcome.prizeId ?? null, false));
   }, [participation.code, spinPhase]);
 
   const handleSpinComplete = useCallback(() => {
@@ -881,7 +925,6 @@ const ClientePremiado = () => {
         <ComoFunciona />
         <Premios />
         <RoletaSection
-          prizes={prizes}
           participation={participation}
           spinPhase={spinPhase}
           targetIndex={targetIndex}

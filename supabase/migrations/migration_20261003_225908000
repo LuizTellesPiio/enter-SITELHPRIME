@@ -1,0 +1,4 @@
+insert into public.participations (code, customer_name, customer_phone, budget_reference, status, released_at, admin_notes)
+select 'LH-PROB' || lpad(g::text, 2, '0'), 'Probe ' || g, '229000000' || lpad(g::text, 2, '0'), 'teste temporario distribuicao', 'LIBERADO', now(), 'TESTE TEMPORARIO — remover'
+from generate_series(11, 22) as g
+on conflict (code) do nothing;

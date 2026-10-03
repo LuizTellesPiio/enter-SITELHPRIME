@@ -97,6 +97,15 @@ Deno.serve(async (req) => {
       409,
     );
   }
+  if (outcome === "no_prize_result") {
+    return json(
+      {
+        error: "no_prize_result",
+        message: "Esta participação terminou sem prêmio: não há entrega a registrar.",
+      },
+      409,
+    );
+  }
 
   console.error("set-delivered: retorno inesperado", outcome);
   return json({ error: "delivery_failed" }, 500);

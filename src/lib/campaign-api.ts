@@ -18,13 +18,17 @@ export interface ValidateResult {
   firstName?: string | null;
   prizeId?: string | null;
   prizeName?: string | null;
+  /** Participação já girada e terminou sem prêmio (sem estoque, sem entrega). */
+  noPrize?: boolean;
   error?: string;
   message?: string;
 }
 
 export interface SpinOutcome {
   ok: boolean;
-  state?: "premiado" | "already_spun";
+  state?: "premiado" | "no_prize" | "already_spun";
+  /** Resultado sem prêmio — vem do backend, nunca decidido aqui. */
+  noPrize?: boolean;
   code?: string | null;
   firstName?: string | null;
   prizeId?: string | null;
@@ -61,6 +65,8 @@ export interface PrizeRecord {
   quantity: number;
   granted: number;
   weight: number;
+  /** Resultado sem prêmio: não usa estoque e não gera entrega. */
+  is_no_prize: boolean;
 }
 
 export interface CreatedParticipation {
@@ -133,6 +139,7 @@ export const validateParticipation = async (code: string): Promise<ValidateResul
     firstName: asNullableText(raw?.first_name),
     prizeId: asNullableText(raw?.prize_id),
     prizeName: asNullableText(raw?.prize_name),
+    noPrize: raw?.no_prize === true,
   };
 };
 
@@ -149,6 +156,7 @@ export const spinParticipation = async (code: string): Promise<SpinOutcome> => {
   return {
     ok: true,
     state,
+    noPrize: raw?.no_prize === true,
     code: asNullableText(raw?.code),
     firstName: asNullableText(raw?.first_name),
     prizeId: asNullableText(raw?.prize_id),
@@ -209,7 +217,6 @@ export const savePrizeConfig = async (
 
   return { ok: true, prizes: (raw?.prizes as PrizeRecord[]) ?? [] };
 };
-
 /* ------------------------------------------------------------------ */
 /* Leituras administrativas (protegidas por RLS: apenas admins)        */
 /* ------------------------------------------------------------------ */
@@ -227,7 +234,7 @@ export const listParticipations = async (): Promise<ParticipationRecord[]> => {
 export const listPrizes = async (): Promise<PrizeRecord[]> => {
   const { data, error } = await supabase
     .from("prizes")
-    .select("id, position, name, short_name, enabled, quantity, granted, weight")
+    .select("id, position, name, short_name, enabled, quantity, granted, weight, is_no_prize")
     .order("position");
 
   if (error) throw error;

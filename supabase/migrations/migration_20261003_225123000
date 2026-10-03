@@ -1,0 +1,13 @@
+alter table public.prizes add column if not exists is_no_prize boolean not null default false;
+
+insert into public.prizes (id, position, name, short_name, enabled, quantity, granted, weight, is_no_prize)
+values ('sem-premio', 6, 'Não foi dessa vez', 'Não foi dessa vez', true, 0, 0, 40, true)
+on conflict (id) do update set is_no_prize = true, enabled = true, weight = 40;
+
+update public.prizes set weight = 2  where id = 'tinta-18l';
+update public.prizes set weight = 4  where id = 'coralit-36';
+update public.prizes set weight = 6  where id = 'kit-churrasco';
+update public.prizes set weight = 8  where id = 'vale-50';
+update public.prizes set weight = 15 where id = 'vale-20';
+update public.prizes set weight = 25 where id = 'vale-10';
+update public.prizes set weight = 40 where id = 'sem-premio';
