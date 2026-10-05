@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Award,
@@ -31,10 +31,11 @@ import {
   NO_PRIZE_MESSAGE,
   type Participation,
   type SpinPhase,
+  type WheelSegment,
 } from "@/data/campaign";
 import { INSTAGRAM_HANDLE, INSTAGRAM_URL } from "@/data/site";
 import { BRAND } from "@/lib/brand";
-import { spinParticipation, validateParticipation } from "@/lib/campaign-api";
+import { spinParticipation, validateParticipation, fetchCampaignPrizes } from "@/lib/campaign-api";
 import { buildWhatsAppLink, WHATSAPP_DISPLAY } from "@/lib/whatsapp";
 
 /* ------------------------------------------------------------------ */
@@ -252,8 +253,8 @@ const Premios = () => {
         </div>
 
         <p className="max-w-2xl text-center text-xs leading-relaxed text-muted-foreground">
-          Prêmios, quantidades e disponibilidade estão sujeitos às condições do
-          regulamento oficial da campanha.
+          Prêmios sujeitos à disponibilidade de estoque. Prêmios, quantidades e disponibilidade
+          estão sujeitos às condições do regulamento oficial da campanha.
         </p>
       </div>
     </section>
@@ -525,6 +526,7 @@ const SecondAccessPanel = ({
 };
 
 const RoletaSection = ({
+  segments,
   participation,
   spinPhase,
   targetIndex,
@@ -533,6 +535,7 @@ const RoletaSection = ({
   onSpin,
   onSpinComplete,
 }: {
+  segments: WheelSegment[];
   participation: Participation;
   spinPhase: SpinPhase;
   targetIndex: number | null;
@@ -542,7 +545,7 @@ const RoletaSection = ({
   onSpinComplete: () => void;
 }) => {
   /* O nome do prêmio vem do backend; o segmento só apoia a apresentação. */
-  const segment = targetIndex != null ? WHEEL_SEGMENTS[targetIndex] : undefined;
+  const segment = targetIndex != null ? segments[targetIndex] : undefined;
   const prizeName =
     participation.result ??
     (segment && !segment.isNoPrize
@@ -566,7 +569,7 @@ const RoletaSection = ({
         />
 
         <RouletteWheel
-          segments={WHEEL_SEGMENTS}
+          segments={segments}
           locked={wheelLocked}
           spinning={spinPhase === "spinning"}
           revealed={spinPhase === "won"}
@@ -725,20 +728,25 @@ const CampaignFooter = ({ link }: { link: string }) => (
 /* Página                                                              */
 /* ------------------------------------------------------------------ */
 
-/** Prêmios da campanha e segmentos visuais — estáticos (só apresentação). */
+/** Prêmios da campanha (só apresentação — a probabilidade vem do backend). */
 const PRIZES = enabledPrizes(CAMPAIGN_PRIZES);
-const WHEEL_SEGMENTS = buildWheelSegments(PRIZES);
+const ALL_PRIZE_IDS = PRIZES.map((prize) => prize.id);
 
 /**
  * Converte o resultado recebido do backend no segmento visual onde a roleta
- * deve parar. Sem prêmio (ou prêmio desconhecido) cai em um slot sem prêmio.
+ * deve parar. Sem prêmio (ou prêmio esgotado/desconhecido) cai em um slot sem
+ * prêmio — segmento de prêmio esgotado não existe na roleta.
  */
-const segmentIndexFor = (prizeId: string | null, noPrize: boolean): number | null => {
+const segmentIndexFor = (
+  segments: WheelSegment[],
+  prizeId: string | null,
+  noPrize: boolean,
+): number | null => {
   if (noPrize || !prizeId) {
-    const index = WHEEL_SEGMENTS.findIndex((segment) => segment.isNoPrize);
+    const index = segments.findIndex((segment) => segment.isNoPrize);
     return index >= 0 ? index : null;
   }
-  const index = WHEEL_SEGMENTS.findIndex((segment) => segment.prizeId === prizeId);
+  const index = segments.findIndex((segment) => segment.prizeId === prizeId);
   return index >= 0 ? index : null;
 };
 
@@ -758,6 +766,28 @@ const ClientePremiado = () => {
   const [targetIndex, setTargetIndex] = useState<number | null>(null);
   const [codeDialogOpen, setCodeDialogOpen] = useState(false);
   const [codeInput, setCodeInput] = useState("");
+
+  /* Segmentos visuais: começam com todos os prêmios e são ajustados pela
+     disponibilidade real — prêmio esgotado sai da roleta. */
+  const [segments, setSegments] = useState<WheelSegment[]>(() =>
+    buildWheelSegments(PRIZES, ALL_PRIZE_IDS),
+  );
+  const segmentsRef = useRef(segments);
+  useEffect(() => {
+    segmentsRef.current = segments;
+  }, [segments]);
+
+  /* Disponibilidade atual dos prêmios (endpoint público: nunca pesos nem estoque). */
+  useEffect(() => {
+    let active = true;
+    void fetchCampaignPrizes().then((result) => {
+      if (!active || !result.ok) return;
+      setSegments(buildWheelSegments(PRIZES, result.availablePrizes));
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const wheelLocked = participation.status !== "valid";
 
@@ -853,7 +883,7 @@ const ClientePremiado = () => {
           ? "Seu prêmio já consta como entregue pela LH Prime."
           : "Este código já foi utilizado e o resultado está registrado.",
     });
-    setTargetIndex(segmentIndexFor(result.prizeId ?? null, noPrize));
+    setTargetIndex(segmentIndexFor(segmentsRef.current, result.prizeId ?? null, noPrize));
     setSpinPhase("won");
   }, []);
 
@@ -895,7 +925,7 @@ const ClientePremiado = () => {
         name: outcome.firstName ?? prev.name,
         message: null,
       }));
-      setTargetIndex(segmentIndexFor(null, true));
+      setTargetIndex(segmentIndexFor(segmentsRef.current, null, true));
       return;
     }
 
@@ -905,7 +935,7 @@ const ClientePremiado = () => {
       noPrize: false,
       name: outcome.firstName ?? prev.name,
     }));
-    setTargetIndex(segmentIndexFor(outcome.prizeId ?? null, false));
+    setTargetIndex(segmentIndexFor(segmentsRef.current, outcome.prizeId ?? null, false));
   }, [participation.code, spinPhase]);
 
   const handleSpinComplete = useCallback(() => {
@@ -925,6 +955,7 @@ const ClientePremiado = () => {
         <ComoFunciona />
         <Premios />
         <RoletaSection
+          segments={segments}
           participation={participation}
           spinPhase={spinPhase}
           targetIndex={targetIndex}

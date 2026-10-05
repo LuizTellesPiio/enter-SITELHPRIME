@@ -10,9 +10,13 @@ import { cn } from "@/lib/utils";
 /* ------------------------------------------------------------------ */
 /* Cliente Premiado — distribuição dos prêmios                         */
 /*                                                                     */
-/* O peso define a probabilidade real (sorteada no backend). A roleta   */
-/* visual não influencia o resultado. O resultado "Sem prêmio" é um     */
-/* registro próprio: não usa estoque e não gera entrega.               */
+/* ATIVO      = o prêmio faz parte da campanha (configuração).         */
+/* DISPONÍVEL = ativo e com estoque restante (pode ser sorteado).      */
+/*                                                                     */
+/* Chance configurada = peso ÷ soma dos pesos-BASE ativos (100%).      */
+/* Chance efetiva     = chance configurada do prêmio disponível; o     */
+/*                      peso de um prêmio esgotado é absorvido pelo    */
+/*                      resultado "Sem prêmio" (nunca redistribuído).  */
 /* ------------------------------------------------------------------ */
 
 const TOTAL_TARGET = 100;
@@ -50,19 +54,48 @@ const remainingOf = (row: PrizeRow): number => {
   return Math.max(quantity - row.granted, 0);
 };
 
-/** Soma dos pesos ativos — a base do sorteio no backend. */
-const activeWeightTotal = (rows: PrizeRow[]): number =>
+/** Disponível = ativo (com peso válido) e com estoque restante. */
+const isAvailable = (row: PrizeRow): boolean =>
+  row.enabled && !row.isNoPrize && remainingOf(row) > 0;
+
+/** Soma dos pesos-BASE ativos — ignora estoque: é a configuração da campanha. */
+const baseWeightTotal = (rows: PrizeRow[]): number =>
   rows.reduce((sum, row) => {
     if (!row.enabled) return sum;
     const weight = toNumber(row.weight);
     return weight && weight > 0 ? sum + weight : sum;
   }, 0);
 
-/** Probabilidade derivada do peso (peso ÷ soma dos pesos ativos). */
-const probabilityOf = (row: PrizeRow, total: number): number | null => {
-  const weight = toNumber(row.weight);
-  if (!row.enabled || total <= 0 || weight === null || weight <= 0) return null;
-  return (weight / total) * TOTAL_TARGET;
+/** Chance configurada (%) de cada linha, sobre a base ativa. */
+const configuredChances = (rows: PrizeRow[], baseTotal: number): Map<string, number> => {
+  const map = new Map<string, number>();
+  rows.forEach((row) => {
+    const weight = toNumber(row.weight);
+    if (!row.enabled || weight === null || weight <= 0 || baseTotal <= 0) {
+      map.set(row.id, 0);
+      return;
+    }
+    map.set(row.id, (weight / baseTotal) * TOTAL_TARGET);
+  });
+  return map;
+};
+
+/** Chance efetiva agora: esgotado vira 0% e o peso vai para o "Sem prêmio". */
+const effectiveChances = (
+  rows: PrizeRow[],
+  configured: Map<string, number>,
+): Map<string, number> => {
+  const absorbed = rows
+    .filter((row) => !row.isNoPrize && row.enabled && (configured.get(row.id) ?? 0) > 0)
+    .filter((row) => !isAvailable(row))
+    .reduce((sum, row) => sum + (configured.get(row.id) ?? 0), 0);
+
+  const map = new Map<string, number>();
+  rows.forEach((row) => {
+    const base = configured.get(row.id) ?? 0;
+    map.set(row.id, row.isNoPrize ? base + absorbed : isAvailable(row) ? base : 0);
+  });
+  return map;
 };
 
 const formatPercent = (value: number): string =>
@@ -122,6 +155,16 @@ export const PremiosPanel = () => {
       payload.push({ id: row.id, enabled: row.enabled, quantity, weight, granted: row.granted });
     }
 
+    // A soma dos pesos-BASE ativos precisa fechar em 100 (estoque não entra aqui).
+    const baseTotal = baseWeightTotal(rows);
+    if (Math.abs(baseTotal - TOTAL_TARGET) > 0.001) {
+      setFeedback({
+        type: "error",
+        text: `A soma dos pesos-base ativos precisa ser exatamente 100 para salvar (atual: ${formatPercent(baseTotal)}). O estoque não entra nessa soma — ele altera apenas a chance efetiva.`,
+      });
+      return;
+    }
+
     const prizeRows = rows.filter((row) => !row.isNoPrize);
     const enabledPrizes = prizeRows.filter((row) => row.enabled);
 
@@ -148,14 +191,9 @@ export const PremiosPanel = () => {
 
     if (result.prizes && result.prizes.length > 0) setRows(toRows(result.prizes));
     setConfigured(true);
-
-    const total = activeWeightTotal(rows);
     setFeedback({
       type: "success",
-      text:
-        Math.abs(total - TOTAL_TARGET) < 0.01
-          ? "Distribuição salva: probabilidade total de 100%. A roleta está liberada para giros."
-          : `Distribuição salva. Atenção: a probabilidade total está em ${formatPercent(total)} — o ideal é fechar em 100%.`,
+      text: "Distribuição salva: pesos-base fechando 100%. A roleta está liberada para giros.",
     });
   };
 
@@ -177,8 +215,17 @@ export const PremiosPanel = () => {
     );
   }
 
-  const totalWeight = activeWeightTotal(rows);
-  const totalIsExact = Math.abs(totalWeight - TOTAL_TARGET) < 0.01;
+  const baseTotal = baseWeightTotal(rows);
+  const baseIsExact = Math.abs(baseTotal - TOTAL_TARGET) < 0.001;
+  const configuredMap = configuredChances(rows, baseTotal);
+  const effectiveMap = effectiveChances(rows, configuredMap);
+  const winChance = rows
+    .filter((row) => !row.isNoPrize && isAvailable(row))
+    .reduce((sum, row) => sum + (effectiveMap.get(row.id) ?? 0), 0);
+  const noPrizeChance = rows
+    .filter((row) => row.isNoPrize)
+    .reduce((sum, row) => sum + (effectiveMap.get(row.id) ?? 0), 0);
+  const effectiveTotal = winChance + noPrizeChance;
 
   return (
     <section className="flex flex-col gap-6">
@@ -210,41 +257,70 @@ export const PremiosPanel = () => {
         <div>
           <h2 className="font-display text-lg font-bold text-primary">Prêmios da campanha</h2>
           <p className="text-sm text-muted-foreground">
-            Os nomes são os prêmios oficiais exibidos na roleta. Ajuste estoque, concedidos e peso.
+            <span className="font-semibold text-primary">Ativo</span> = faz parte da campanha ·{" "}
+            <span className="font-semibold text-primary">Disponível</span> = ativo e com estoque
+            restante (pode ser sorteado).
           </p>
         </div>
 
-        {/* Conferência da distribuição */}
-        <div
-          className={cn(
-            "flex flex-col gap-1 rounded-2xl border px-4 py-3 sm:flex-row sm:items-center sm:justify-between",
-            totalIsExact ? "border-emerald/30 bg-emerald/10" : "border-warning/40 bg-warning/10",
-          )}
-        >
-          <span
+        {/* Resumo da distribuição */}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div
             className={cn(
-              "font-display text-sm font-bold",
-              totalIsExact ? "text-emerald" : "text-warning",
+              "flex flex-col gap-0.5 rounded-2xl border px-4 py-3",
+              baseIsExact ? "border-emerald/30 bg-emerald/10" : "border-warning/40 bg-warning/10",
             )}
           >
-            Probabilidade total: {formatPercent(totalWeight)}
-          </span>
-          <span
-            className={cn(
-              "text-xs leading-relaxed",
-              totalIsExact ? "text-emerald" : "text-warning",
-            )}
-          >
-            {totalIsExact
-              ? "Distribuição fechada em 100%."
-              : "Atenção: a soma dos pesos ativos (incluindo o resultado sem prêmio) precisa fechar em 100%."}
-          </span>
+            <span className={cn("text-xs font-bold uppercase tracking-[0.12em]", baseIsExact ? "text-emerald" : "text-warning")}>
+              Distribuição configurada
+            </span>
+            <span className={cn("font-display text-lg font-bold", baseIsExact ? "text-emerald" : "text-warning")}>
+              {formatPercent(baseTotal)}
+            </span>
+            <span className={cn("text-xs leading-snug", baseIsExact ? "text-emerald" : "text-warning")}>
+              {baseIsExact
+                ? "Pesos-base ativos fechando 100%."
+                : `A soma dos pesos-base ativos precisa fechar em 100% (não entram estoque nem prêmios inativos).`}
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-0.5 rounded-2xl border border-border/70 bg-muted/30 px-4 py-3">
+            <span className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
+              Distribuição efetiva
+            </span>
+            <span className="font-display text-lg font-bold text-primary">
+              {formatPercent(effectiveTotal)}
+            </span>
+            <span className="text-xs leading-snug text-muted-foreground">
+              Com o estoque de agora: prêmio esgotado não concorre e seu peso vai para o "Sem prêmio".
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-0.5 rounded-2xl border border-emerald/30 bg-emerald/5 px-4 py-3">
+            <span className="text-xs font-bold uppercase tracking-[0.12em] text-emerald">
+              Chance atual de ganhar algum prêmio
+            </span>
+            <span className="font-display text-lg font-bold text-emerald">{formatPercent(winChance)}</span>
+          </div>
+
+          <div className="flex flex-col gap-0.5 rounded-2xl border border-border/70 bg-muted/30 px-4 py-3">
+            <span className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
+              Chance atual de não receber prêmio
+            </span>
+            <span className="font-display text-lg font-bold text-primary">
+              {formatPercent(noPrizeChance)}
+            </span>
+          </div>
         </div>
 
         <div className="flex flex-col gap-4">
           {rows.map((row) => {
-            const probability = probabilityOf(row, totalWeight);
             const remaining = remainingOf(row);
+            const configuredChance = configuredMap.get(row.id) ?? 0;
+            const effectiveChance = effectiveMap.get(row.id) ?? 0;
+            const available = isAvailable(row);
+            const exhausted = !row.isNoPrize && remaining <= 0;
+
             return (
               <div
                 key={row.id}
@@ -259,6 +335,16 @@ export const PremiosPanel = () => {
                       <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-card px-3 py-1 text-[0.65rem] font-bold uppercase tracking-[0.14em] text-primary">
                         <Sparkles className="size-3" aria-hidden="true" />
                         Sem prêmio
+                      </span>
+                    ) : null}
+                    {exhausted ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-destructive/30 bg-destructive/10 px-3 py-1 text-[0.65rem] font-bold uppercase tracking-[0.14em] text-destructive">
+                        Esgotado
+                      </span>
+                    ) : null}
+                    {!row.isNoPrize && available && remaining === 1 ? (
+                      <span className="inline-flex items-center rounded-full border border-warning/40 bg-warning/10 px-3 py-1 text-[0.65rem] font-bold uppercase tracking-[0.14em] text-warning">
+                        Última unidade
                       </span>
                     ) : null}
                     <p className="font-display text-sm font-bold text-primary">{row.name}</p>
@@ -287,14 +373,19 @@ export const PremiosPanel = () => {
                       </p>
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <span className="text-xs font-medium text-foreground">Probabilidade</span>
-                      <div className="flex h-10 items-center rounded-md border border-border bg-card px-3">
+                      <span className="text-xs font-medium text-foreground">
+                        Chance configurada
+                      </span>
+                      <div
+                        aria-readonly="true"
+                        className="flex h-10 items-center rounded-md border border-border bg-card px-3"
+                      >
                         <span className="font-display text-sm font-bold text-primary">
-                          {probability === null ? "—" : formatPercent(probability)}
+                          {formatPercent(configuredChance)}
                         </span>
                       </div>
                       <p className="text-[0.7rem] leading-snug text-muted-foreground">
-                        Chance de o cliente sair sem prêmio.
+                        Peso-base do resultado sem prêmio.
                       </p>
                     </div>
                     <div className="flex flex-col gap-1.5">
@@ -311,65 +402,108 @@ export const PremiosPanel = () => {
                     </div>
                   </div>
                 ) : (
-                  <>
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      <div className="flex flex-col gap-1.5">
-                        <Label htmlFor={`qty-${row.id}`} className="text-xs">
-                          Quantidade disponível
-                        </Label>
-                        <Input
-                          id={`qty-${row.id}`}
-                          inputMode="numeric"
-                          value={row.quantity}
-                          onChange={(event) => update(row.id, { quantity: event.target.value })}
-                          className="h-10"
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1.5">
-                        <span className="text-xs font-medium text-foreground">Concedida</span>
-                        <div
-                          aria-readonly="true"
-                          title="Atualizado automaticamente pelo sistema"
-                          className="flex h-10 cursor-not-allowed items-center justify-between gap-2 rounded-md border border-border bg-muted px-3 text-muted-foreground"
-                        >
-                          <span className="font-display text-sm font-bold text-foreground">
-                            {row.granted}
-                          </span>
-                          <Lock className="size-3.5" aria-hidden="true" />
-                        </div>
-                        <p className="text-[0.7rem] leading-snug text-muted-foreground">
-                          Somente leitura — atualizado pelo sistema
-                        </p>
-                      </div>
-                      <div className="flex flex-col gap-1.5">
-                        <Label htmlFor={`weight-${row.id}`} className="text-xs">
-                          Peso
-                        </Label>
-                        <Input
-                          id={`weight-${row.id}`}
-                          inputMode="decimal"
-                          value={row.weight}
-                          onChange={(event) => update(row.id, { weight: event.target.value })}
-                          className="h-10"
-                        />
-                      </div>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor={`qty-${row.id}`} className="text-xs">
+                        Quantidade disponível
+                      </Label>
+                      <Input
+                        id={`qty-${row.id}`}
+                        inputMode="numeric"
+                        value={row.quantity}
+                        onChange={(event) => update(row.id, { quantity: event.target.value })}
+                        className="h-10"
+                      />
                     </div>
+                    <div className="flex flex-col gap-1.5">
+                      <span className="text-xs font-medium text-foreground">Concedida</span>
+                      <div
+                        aria-readonly="true"
+                        title="Atualizado automaticamente pelo sistema"
+                        className="flex h-10 cursor-not-allowed items-center justify-between gap-2 rounded-md border border-border bg-muted px-3 text-muted-foreground"
+                      >
+                        <span className="font-display text-sm font-bold text-foreground">
+                          {row.granted}
+                        </span>
+                        <Lock className="size-3.5" aria-hidden="true" />
+                      </div>
+                      <p className="text-[0.7rem] leading-snug text-muted-foreground">
+                        Somente leitura — atualizado pelo sistema
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor={`weight-${row.id}`} className="text-xs">
+                        Peso
+                      </Label>
+                      <Input
+                        id={`weight-${row.id}`}
+                        inputMode="decimal"
+                        value={row.weight}
+                        onChange={(event) => update(row.id, { weight: event.target.value })}
+                        className="h-10"
+                      />
+                    </div>
+                  </div>
+                )}
 
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                      <p
+                <div className="flex flex-col gap-1.5 rounded-2xl border border-border/60 bg-card px-4 py-3">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                    <p className="text-xs font-semibold text-muted-foreground">
+                      Chance configurada:{" "}
+                      <span className="font-display text-sm font-bold text-primary">
+                        {formatPercent(configuredChance)}
+                      </span>
+                    </p>
+                    <p className="text-xs font-semibold text-muted-foreground">
+                      Chance efetiva agora:{" "}
+                      <span
                         className={cn(
-                          "text-xs font-semibold",
-                          remaining > 0 ? "text-emerald" : "text-destructive",
+                          "font-display text-sm font-bold",
+                          effectiveChance > 0 ? "text-emerald" : "text-destructive",
                         )}
                       >
-                        Restantes: {remaining}
+                        {formatPercent(effectiveChance)}
+                      </span>
+                    </p>
+                  </div>
+
+                  {row.isNoPrize ? (
+                    <>
+                      <p className="text-xs text-muted-foreground">
+                        Inclui pesos de prêmios atualmente esgotados.
                       </p>
-                      <p className="text-xs font-semibold text-primary">
-                        Probabilidade: {probability === null ? "—" : formatPercent(probability)}
-                      </p>
+                      <p className="text-xs font-semibold text-primary">Status: Sem prêmio</p>
+                    </>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                      <span className="font-semibold">
+                        Estoque: {row.granted} concedidos / {toNumber(row.quantity) ?? 0} unidades
+                      </span>
+                      <span className="font-semibold">Restantes: {remaining}</span>
+                      <span
+                        className={cn(
+                          "font-display font-bold",
+                          !row.enabled
+                            ? "text-muted-foreground"
+                            : exhausted
+                              ? "text-destructive"
+                              : "text-emerald",
+                        )}
+                      >
+                        Status: {!row.enabled ? "Inativo" : exhausted ? "ESGOTADO" : "Disponível"}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {row.enabled
+                          ? exhausted
+                            ? "Ativo · Esgotado"
+                            : remaining === 1
+                              ? "Ativo · Última unidade"
+                              : `Ativo · ${remaining} restantes`
+                          : "Fora da campanha"}
+                      </span>
                     </div>
-                  </>
-                )}
+                  )}
+                </div>
               </div>
             );
           })}
@@ -394,10 +528,12 @@ export const PremiosPanel = () => {
         </Button>
 
         <p className="text-xs leading-relaxed text-muted-foreground">
-          O peso define a chance relativa de cada resultado entre os prêmios que ainda têm estoque,
-          incluindo o "Sem prêmio". O sistema não define probabilidades por conta própria: usa
-          exatamente a distribuição salva aqui. A roleta exibe alguns resultados repetidos em mais de
-          um segmento apenas para ficar visualmente equilibrada — isso não altera a probabilidade.
+          O peso define a chance relativa de cada resultado entre os pesos-base ativos. O sistema não
+          define probabilidades por conta própria: usa exatamente a distribuição salva aqui. Prêmio
+          esgotado não é sorteado e seu peso é absorvido pelo "Sem prêmio" — ao aumentar o estoque, o
+          prêmio volta a concorrer com a chance configurada automaticamente. A roleta exibe alguns
+          resultados repetidos em mais de um segmento apenas para ficar visualmente equilibrada —
+          isso não altera a probabilidade.
         </p>
       </div>
     </section>

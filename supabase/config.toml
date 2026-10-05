@@ -8,6 +8,10 @@ verify_jwt = false
 [functions.spin]
 verify_jwt = false
 
+# Disponibilidade dos prêmios (público): a roleta só mostra o que pode ser sorteado.
+[functions.campaign-prizes]
+verify_jwt = false
+
 # LH PRIME IA: página pública (sem login) cria a tarefa e consulta o andamento.
 [functions.ai-preview-create]
 verify_jwt = false

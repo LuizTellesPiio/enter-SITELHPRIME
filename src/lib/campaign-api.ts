@@ -252,3 +252,36 @@ export const isSpinEnabled = async (): Promise<boolean> => {
   if (error) return false;
   return data?.prizes_configured === true;
 };
+
+/* ------------------------------------------------------------------ */
+/* Endpoint público de disponibilidade (usado pela roleta)             */
+/* ------------------------------------------------------------------ */
+
+export interface CampaignPrizesResult {
+  ok: boolean;
+  spinEnabled: boolean;
+  /** Prêmios que podem ser sorteados agora (ativos e com estoque). */
+  availablePrizes: string[];
+}
+
+/**
+ * Disponibilidade atual dos prêmios — nunca pesos, probabilidades ou estoque
+ * administrativo. Serve apenas para a roleta não exibir prêmio esgotado.
+ */
+export const fetchCampaignPrizes = async (): Promise<CampaignPrizesResult> => {
+  const raw = await invokeFunction<Record<string, unknown>>("campaign-prizes", {});
+
+  if (asText(raw?.error) || raw?.ok !== true) {
+    return { ok: false, spinEnabled: false, availablePrizes: [] };
+  }
+
+  const available = Array.isArray(raw?.available_prizes)
+    ? (raw.available_prizes as unknown[]).filter((id): id is string => typeof id === "string")
+    : [];
+
+  return {
+    ok: true,
+    spinEnabled: raw?.spin_enabled === true,
+    availablePrizes: available,
+  };
+};

@@ -106,27 +106,25 @@ export const NO_PRIZE_MESSAGE =
   "Mas obrigado por confiar na LH Prime. Sua participação já fez parte do Cliente Premiado. 💚";
 
 /**
- * Layout visual da roleta: 12 segmentos, com repetições e três slots sem prêmio
- * distribuídos de forma que nenhum fique ao lado do outro.
+ * Desenho da roleta: quantas vezes cada prêmio aparece no visual.
  *
- * IMPORTANTE: este layout é apenas apresentação. Quantidade e tamanho dos
- * segmentos NÃO definem probabilidade — o backend continua sorteando pelos
- * pesos configurados no painel e o frontend só encontra um segmento
- * correspondente ao resultado recebido.
+ * IMPORTANTE: é apenas apresentação. Quantidade e tamanho dos segmentos NÃO
+ * definem probabilidade — o backend sorteia pelos pesos configurados e o
+ * frontend só encontra um segmento correspondente ao resultado recebido.
  */
-export const WHEEL_LAYOUT: string[] = [
+export const WHEEL_SEGMENT_TARGET = 12;
+
+/** Ordem e repetições do desenho original (só estética). */
+const WHEEL_PRIZE_DRAW: string[] = [
   "tinta-18l",
   "vale-10",
   "kit-churrasco",
-  NO_PRIZE_ID,
   "coralit-36",
   "vale-20",
   "vale-10",
-  NO_PRIZE_ID,
   "vale-50",
   "vale-10",
   "vale-20",
-  NO_PRIZE_ID,
 ];
 
 export interface WheelSegment {
@@ -139,16 +137,56 @@ export interface WheelSegment {
   isNoPrize: boolean;
 }
 
-/** Segmentos exibidos na roleta, na ordem do layout. */
-export const buildWheelSegments = (prizes: CampaignPrize[]): WheelSegment[] =>
-  WHEEL_LAYOUT.flatMap((id, index): WheelSegment[] => {
-    if (id === NO_PRIZE_ID) {
-      return [{ key: `no-prize-${index}`, prizeId: NO_PRIZE_ID, label: NO_PRIZE_LABEL, isNoPrize: true }];
+/**
+ * Monta os segmentos exibidos na roleta.
+ *
+ * Prêmio esgotado (ou inativo) não aparece como possibilidade: os segmentos
+ * dele viram "Não foi dessa vez", redistribuídos para nenhum slot sem prêmio
+ * ficar lado a lado. Se o estoque voltar, ele reaparece automaticamente.
+ */
+export const buildWheelSegments = (
+  prizes: CampaignPrize[],
+  availablePrizeIds: string[],
+): WheelSegment[] => {
+  const available = new Set(availablePrizeIds);
+  const labelOf = (id: string): string =>
+    prizes.find((prize) => prize.id === id)?.shortName ?? id;
+
+  const prizeIds = WHEEL_PRIZE_DRAW.filter((id) => available.has(id));
+  const noPrizeCount = Math.max(1, WHEEL_SEGMENT_TARGET - prizeIds.length);
+  const prizeList = prizeIds.slice(0, Math.max(WHEEL_SEGMENT_TARGET - noPrizeCount, 0));
+  const size = prizeList.length + noPrizeCount;
+
+  /* Slots sem prêmio distribuídos uniformemente (nunca lado a lado). */
+  const noPrizeAt = new Set<number>();
+  for (let k = 0; k < noPrizeCount; k += 1) {
+    noPrizeAt.add(Math.min(size - 1, Math.floor(((k + 0.5) * size) / noPrizeCount)));
+  }
+
+  const segments: WheelSegment[] = [];
+  let prizeIndex = 0;
+  for (let i = 0; i < size; i += 1) {
+    if (noPrizeAt.has(i) || prizeIndex >= prizeList.length) {
+      segments.push({
+        key: `no-prize-${i}`,
+        prizeId: NO_PRIZE_ID,
+        label: NO_PRIZE_LABEL,
+        isNoPrize: true,
+      });
+    } else {
+      const id = prizeList[prizeIndex];
+      segments.push({
+        key: `${id}-${prizeIndex}`,
+        prizeId: id,
+        label: labelOf(id),
+        isNoPrize: false,
+      });
+      prizeIndex += 1;
     }
-    const prize = prizes.find((item) => item.id === id);
-    if (!prize) return [];
-    return [{ key: `${id}-${index}`, prizeId: id, label: prize.shortName, isNoPrize: false }];
-  });
+  }
+
+  return segments;
+};
 
 /* ------------------------------------------------------------------ */
 /* Estados da experiência (apenas de interface; nunca segurança)       */
