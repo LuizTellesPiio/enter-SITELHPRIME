@@ -1,0 +1,31 @@
+do $$
+declare
+  v_target integer;
+  v_deleted integer;
+  v_no_prize integer;
+  r record;
+begin
+  select count(*) into v_target from public.participations
+   where code like 'LH-PROB%' and admin_notes like 'TESTE TEMPORARIO%';
+  select count(*) into v_no_prize from public.participations
+   where code like 'LH-PROB%' and admin_notes like 'TESTE TEMPORARIO%' and result_prize_id is null;
+
+  for r in
+    select result_prize_id as prize_id, count(*) as qty
+      from public.participations
+     where code like 'LH-PROB%' and admin_notes like 'TESTE TEMPORARIO%'
+       and result_prize_id is not null
+     group by result_prize_id
+  loop
+    update public.prizes p
+       set granted = greatest(p.granted - r.qty, 0), updated_at = now()
+     where p.id = r.prize_id and p.is_no_prize = false;
+    raise notice 'premio % descontado %', r.prize_id, r.qty;
+  end loop;
+
+  delete from public.participations
+   where code like 'LH-PROB%' and admin_notes like 'TESTE TEMPORARIO%';
+  get diagnostics v_deleted = row_count;
+
+  raise notice 'alvo=% removidas=% sem_premio=%', v_target, v_deleted, v_no_prize;
+end $$;
