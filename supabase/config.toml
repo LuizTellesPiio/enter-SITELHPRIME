@@ -17,6 +17,10 @@ verify_jwt = false
 [functions.instagram-scheduler-337d4a58ae3d]
 verify_jwt = false
 
+# Diagnóstico somente-leitura do conector (token de ciclo ou admin). Não publica.
+[functions.instagram-diagnose-337d4a58ae3d]
+verify_jwt = false
+
 # LH PRIME IA: página pública (sem login) cria a tarefa e consulta o andamento.
 [functions.ai-preview-create]
 verify_jwt = false

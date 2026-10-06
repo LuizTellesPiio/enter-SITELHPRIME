@@ -4,10 +4,10 @@ import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supa
    Chamado pelo scheduler nativo do banco (pg_cron -> pg_net) com o token de
    ciclo, ou pelo painel por um administrador autenticado.
 
-   Pega no máximo UM item vencido por execução (respeitando o intervalo mínimo
-   e o máximo semanal), reserva atomicamente, publica e registra o resultado.
-   Se a cota do Instagram estiver esgotada ou a instância estiver fora do ar,
-   o item NÃO é perdido: volta para o próximo horário válido. */
+   Pega no máximo UM item vencido por execução, reserva atomicamente, roda o
+   preflight, cria os containers (aguardando o processamento dentro do próprio
+   Publish) e registra o resultado. Erro transitório tem retry com backoff;
+   indisponibilidade não perde o conteúdo: volta ao próximo horário válido. */
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -27,6 +27,26 @@ const OP_USER_INFO = "3e72e5e2-8e5a-4d88-89f8-eff4adb95b81";
 const OP_PUBLISH_LIMIT = "2b09b02c-a8be-441d-9d30-134254ae122b";
 const OP_CREATE_CONTAINER = "675acace-1230-4d76-9cdd-b5d29d1bfefa";
 const OP_PUBLISH_MEDIA = "8618e4b6-47c6-4e47-8509-13ea26d66522";
+const OP_LIST_MEDIA = "9a276303-085d-4540-9a07-59bec140b71c";
+
+const TRANSIENT_DELAYS_MS = [1500, 4000];
+/** Operações pesadas (container de vídeo / publicar) esperam mais entre tentativas. */
+const HEAVY_DELAYS_MS = [15000, 30000];
+/** Espera entre criar os filhos de vídeo e montar o carrossel. */
+const CAROUSEL_READY_WAIT_MS = 35000;
+/** Orçamento total da execução: evita ser morto no meio do fluxo. */
+const RUN_BUDGET_MS = 110000;
+const startedAt = Date.now();
+
+const remainingBudget = (): number => RUN_BUDGET_MS - (Date.now() - startedAt);
+
+const waitWithinBudget = async (ms: number): Promise<void> => {
+  const budget = remainingBudget();
+  if (budget <= 2000) {
+    throw new Error("platform_timeout: tempo esgotado antes de concluir o processamento no Instagram");
+  }
+  await new Promise((resolve) => setTimeout(resolve, Math.min(ms, budget - 2000)));
+};
 
 const serviceClient = (): SupabaseClient =>
   createClient(
@@ -46,14 +66,22 @@ const readJson = async (req: Request): Promise<Record<string, unknown>> => {
 
 const sanitize = (value: unknown): string => {
   const text = typeof value === "string" ? value : String(value ?? "");
-  return text
-    .replace(/EAA[A-Za-z0-9_-]{10,}/g, "[token]")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 300);
+  return text.replace(/EAA[A-Za-z0-9_-]{10,}/g, "[token]").replace(/\s+/g, " ").trim().slice(0, 300);
 };
 
-const callConnector = async (operationId: string, input: Record<string, unknown>) => {
+const classify = (message: string): "transient" | "definitive" => {
+  const m = message.toLowerCase();
+  if (
+    /platform_unavailable|platform_timeout|platform_contract|platform_request|provider_operation_failed|operation_call_ambiguous|http\s?5\d\d|timeout|timed out|network|connection|rate limit|too many/.test(
+      m,
+    )
+  ) {
+    return "transient";
+  }
+  return "definitive";
+};
+
+const callConnectorOnce = async (operationId: string, input: Record<string, unknown>) => {
   const token = Deno.env.get(TOKEN_ENV);
   if (!token) {
     console.error("instagram-scheduler: credencial do conector ausente");
@@ -84,20 +112,56 @@ const callConnector = async (operationId: string, input: Record<string, unknown>
   return (parsed?.data ?? {}) as Record<string, unknown>;
 };
 
+const callConnector = async (
+  operationId: string,
+  input: Record<string, unknown>,
+  label: string,
+  delays: number[] = TRANSIENT_DELAYS_MS,
+) => {
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      return await callConnectorOnce(operationId, input);
+    } catch (error) {
+      lastError = error as Error;
+      const kind = classify(lastError.message);
+      console.warn(
+        `instagram-scheduler: ${label} falhou (${attempt}/3, ${kind}):`,
+        sanitize(lastError.message),
+      );
+      if (kind === "definitive" || attempt === 3) break;
+      await waitWithinBudget(delays[attempt - 1] ?? 4000);
+    }
+  }
+
+  throw lastError ?? new Error("connector_failed");
+};
+
+interface MediaItem {
+  kind?: string;
+  url?: string;
+}
+
 const resolveAccount = async (): Promise<{ id: string; accountType: string | null }> => {
-  const info = await callConnector(OP_USER_INFO, { ig_user_id: "me", fields: "id,username,account_type" });
+  const info = await callConnector(
+    OP_USER_INFO,
+    { ig_user_id: "me", fields: "id,username,account_type" },
+    "user_info",
+  );
   const id = info?.id ?? info?.user_id;
-  if (typeof id !== "string" || !id) throw new Error("ig_user_not_resolved: não foi possível identificar a conta conectada");
+  if (typeof id !== "string" || !id) {
+    throw new Error("ig_user_not_resolved: não foi possível identificar a conta conectada");
+  }
   const accountType = typeof info?.account_type === "string" ? info.account_type : null;
   return { id, accountType };
 };
 
 const hasPublishingQuota = async (igUserId: string): Promise<boolean> => {
   try {
-    const limit = await callConnector(OP_PUBLISH_LIMIT, { ig_user_id: igUserId });
+    const limit = await callConnector(OP_PUBLISH_LIMIT, { ig_user_id: igUserId }, "publish_limit");
     const usage = Number(limit?.quota_usage);
-    const config = limit?.config as Record<string, unknown> | undefined;
-    const total = Number(config?.quota_total);
+    const total = Number((limit?.config as Record<string, unknown>)?.quota_total);
     if (Number.isFinite(usage) && Number.isFinite(total) && total > 0 && usage >= total) return false;
     return true;
   } catch (error) {
@@ -106,12 +170,6 @@ const hasPublishingQuota = async (igUserId: string): Promise<boolean> => {
   }
 };
 
-interface MediaItem {
-  kind?: string;
-  url?: string;
-}
-
-/** Preflight antes de publicar: falha aqui não cria nada nem duplica conteúdo. */
 const preflight = async (item: { content_type: string; media_urls: MediaItem[] }): Promise<string> => {
   const media = (item.media_urls ?? []).filter((entry) => typeof entry?.url === "string" && entry.url);
   if (media.length === 0) throw new Error("preflight_media_missing: o item não tem mídia válida");
@@ -121,11 +179,18 @@ const preflight = async (item: { content_type: string; media_urls: MediaItem[] }
       throw new Error(`preflight_media_count: carrossel exige de 2 a 10 itens (atual: ${media.length})`);
     }
   } else if (media.length !== 1) {
-    throw new Error(`preflight_media_count: formato ${item.content_type} aceita exatamente 1 mídia (atual: ${media.length})`);
+    throw new Error(
+      `preflight_media_count: formato ${item.content_type} aceita exatamente 1 mídia (atual: ${media.length})`,
+    );
   }
 
   for (const entry of media) {
-    const response = await fetch(entry.url as string, { method: "HEAD" });
+    let response: Response;
+    try {
+      response = await fetch(entry.url as string, { method: "HEAD" });
+    } catch (error) {
+      throw new Error(`preflight_media_unreachable: mídia inacessível (${sanitize((error as Error).message)})`);
+    }
     const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
     const length = Number(response.headers.get("content-length") ?? "0");
     if (!response.ok) {
@@ -151,50 +216,39 @@ const preflight = async (item: { content_type: string; media_urls: MediaItem[] }
   return account.id;
 };
 
-const publishToInstagram = async (item: {
-  content_type: string;
-  caption: string;
-  media_urls: MediaItem[];
-}): Promise<string> => {
-  const media = (item.media_urls ?? []).filter((entry) => typeof entry?.url === "string" && entry.url);
-  const igUserId = await preflight({ content_type: item.content_type, media_urls: item.media_urls });
+const findPublishedDuplicate = async (caption: string): Promise<string | null> => {
+  const target = caption.replace(/\s+/g, " ").trim();
+  if (!target) return null;
 
-  const createContainer = async (input: Record<string, unknown>): Promise<string> => {
-    const created = await callConnector(OP_CREATE_CONTAINER, { ig_user_id: igUserId, ...input });
-    const id = created?.id ?? created?.creation_id;
-    if (typeof id !== "string" || !id) throw new Error("container_not_created");
-    return id;
-  };
+  try {
+    const recent = await callConnector(
+      OP_LIST_MEDIA,
+      { ig_user_id: "me", fields: "id,caption,timestamp", limit: 25 },
+      "list_media",
+    );
+    const list = Array.isArray((recent as Record<string, unknown>)?.data)
+      ? ((recent as Record<string, unknown>).data as Record<string, unknown>[])
+      : Array.isArray(recent)
+        ? (recent as unknown as Record<string, unknown>[])
+        : [];
 
-  let containerId: string;
-
-  if (item.content_type === "carousel") {
-    if (media.length < 2) throw new Error("invalid_media: carrossel exige pelo menos 2 mídias");
-    const children: string[] = [];
-    for (const entry of media.slice(0, 10)) {
-      children.push(await createContainer({ video_url: entry.url, is_carousel_item: true }));
-    }
-    containerId = await createContainer({ media_type: "CAROUSEL", children, caption: item.caption });
-  } else if (item.content_type === "story") {
-    containerId = await createContainer({
-      media_type: "STORIES",
-      ...(media[0].url?.includes(".mp4") ? { video_url: media[0].url } : { image_url: media[0].url }),
-    });
-  } else if (item.content_type === "image") {
-    containerId = await createContainer({ image_url: media[0].url, caption: item.caption });
-  } else {
-    containerId = await createContainer({ media_type: "REELS", video_url: media[0].url, caption: item.caption });
+    const duplicate = list.find(
+      (entry) => String(entry?.caption ?? "").replace(/\s+/g, " ").trim() === target,
+    );
+    return duplicate ? String(duplicate.id ?? "") || null : null;
+  } catch (error) {
+    console.warn("instagram-scheduler: checagem de duplicidade indisponivel", sanitize((error as Error).message));
+    return null;
   }
+};
 
-  const published = await callConnector(OP_PUBLISH_MEDIA, { creation_id: containerId });
-  return String(published?.id ?? published?.media_id ?? containerId);
+const appendHistory = (history: unknown, message: string): string[] => {
+  const list = Array.isArray(history) ? (history as string[]) : [];
+  return [...list, `${new Date().toISOString()} · ${message}`].slice(-10);
 };
 
 /** Autoriza o scheduler do banco (token de ciclo) ou um administrador logado. */
-const authorize = async (
-  req: Request,
-  supabase: SupabaseClient,
-): Promise<{ ok: boolean; mode: string }> => {
+const authorize = async (req: Request, supabase: SupabaseClient): Promise<{ ok: boolean; mode: string }> => {
   const cycleToken = req.headers.get("x-cycle-token") ?? "";
   if (cycleToken) {
     const { data } = await supabase
@@ -233,7 +287,7 @@ Deno.serve(async (req) => {
 
   const { data: due } = await supabase
     .from("instagram_queue")
-    .select("id, content_type, caption, media_urls, retry_count")
+    .select("id")
     .eq("status", "scheduled")
     .lte("scheduled_at", new Date().toISOString())
     .order("scheduled_at", { ascending: true })
@@ -242,16 +296,20 @@ Deno.serve(async (req) => {
 
   if (!due) return json({ state: "idle", published: 0 });
 
-  /* Reserva atômica: duas execuções do scheduler não pegam o mesmo item. */
+  /* Reserva atômica: duas execuções não pegam o mesmo item. */
   const { data: claimed } = await supabase
     .from("instagram_queue")
     .update({ status: "publishing", error_message: null })
     .eq("id", due.id)
     .eq("status", "scheduled")
-    .select("id, content_type, caption, media_urls, retry_count")
+    .select("id, content_type, caption, media_urls, retry_count, error_history")
     .maybeSingle();
 
   if (!claimed) return json({ state: "skipped", published: 0 });
+
+  const contentType = String(claimed.content_type ?? "reel");
+  const caption = String(claimed.caption ?? "");
+  const mediaUrls = (claimed.media_urls ?? []) as MediaItem[];
 
   const reschedule = async (message: string) => {
     const { data: slot } = await supabase.rpc("instagram_next_slot");
@@ -261,17 +319,92 @@ Deno.serve(async (req) => {
         status: "scheduled",
         scheduled_at: typeof slot === "string" ? slot : null,
         error_message: message,
+        error_history: appendHistory(claimed.error_history, message),
       })
       .eq("id", claimed.id)
       .eq("status", "publishing");
   };
 
   try {
-    const mediaId = await publishToInstagram({
-      content_type: String(claimed.content_type ?? "reel"),
-      caption: String(claimed.caption ?? ""),
-      media_urls: (claimed.media_urls ?? []) as MediaItem[],
-    });
+    const igUserId = await preflight({ content_type: contentType, media_urls: mediaUrls });
+
+    const duplicate = await findPublishedDuplicate(caption);
+    if (duplicate) {
+      await supabase
+        .from("instagram_queue")
+        .update({
+          status: "published",
+          published_at: new Date().toISOString(),
+          instagram_media_id: duplicate,
+          error_message: null,
+        })
+        .eq("id", claimed.id)
+        .eq("status", "publishing");
+
+      return json({ state: "published", published: 1, instagram_media_id: duplicate, reused: true, mode: auth.mode });
+    }
+
+    const containerIds: string[] = [];
+    const persist = async () => {
+      await supabase.from("instagram_queue").update({ container_ids: containerIds }).eq("id", claimed.id);
+    };
+    await persist();
+
+    const createContainer = async (input: Record<string, unknown>): Promise<string> => {
+      const created = await callConnector(
+        OP_CREATE_CONTAINER,
+        { ig_user_id: igUserId, ...input },
+        "create_container",
+        HEAVY_DELAYS_MS,
+      );
+      const id = created?.id ?? created?.creation_id;
+      if (typeof id !== "string" || !id) throw new Error("container_not_created: o Instagram não devolveu o contêiner");
+      containerIds.push(id);
+      await persist();
+      return id;
+    };
+
+    let parentId: string;
+
+    if (contentType === "carousel") {
+      const media = mediaUrls.filter((entry) => typeof entry?.url === "string" && entry.url);
+      const children: string[] = [];
+      /* Ordem obrigatória: 1) Antes, 2) Depois. */
+      for (const entry of media.slice(0, 10)) {
+        children.push(await createContainer({ video_url: entry.url, is_carousel_item: true }));
+      }
+      /* Vídeo não fica pronto na hora: espera limitada antes de montar o carrossel. */
+      await waitWithinBudget(CAROUSEL_READY_WAIT_MS);
+      parentId = await createContainer({ media_type: "CAROUSEL", children, caption });
+    } else if (contentType === "story") {
+      parentId = await createContainer({
+        media_type: "STORIES",
+        ...(mediaUrls[0]?.url?.includes(".mp4") ? { video_url: mediaUrls[0].url } : { image_url: mediaUrls[0]?.url }),
+      });
+    } else if (contentType === "image") {
+      parentId = await createContainer({ image_url: mediaUrls[0]?.url, caption });
+    } else {
+      parentId = await createContainer({ media_type: "REELS", video_url: mediaUrls[0]?.url, caption });
+    }
+
+    /* Re-checagem imediatamente antes de publicar. */
+    const { data: fresh } = await supabase
+      .from("instagram_queue")
+      .select("status, published_at, instagram_media_id")
+      .eq("id", claimed.id)
+      .maybeSingle();
+
+    if (!fresh || fresh.status !== "publishing" || fresh.published_at || fresh.instagram_media_id) {
+      throw new Error("already_published: o item já foi publicado ou saiu de publicação");
+    }
+
+    const published = await callConnector(
+      OP_PUBLISH_MEDIA,
+      { creation_id: parentId },
+      "publish_media",
+      HEAVY_DELAYS_MS,
+    );
+    const mediaId = String(published?.id ?? published?.media_id ?? parentId);
 
     await supabase
       .from("instagram_queue")
@@ -279,6 +412,7 @@ Deno.serve(async (req) => {
         status: "published",
         published_at: new Date().toISOString(),
         instagram_media_id: mediaId,
+        container_ids: [...containerIds, `published:${mediaId}`],
         error_message: null,
       })
       .eq("id", claimed.id)
@@ -293,9 +427,9 @@ Deno.serve(async (req) => {
       return json({ state: "rescheduled", published: 0, mode: auth.mode });
     }
 
-    /* Instância/credencial indisponível: mantém o conteúdo e devolve ao próximo horário. */
-    if (/connector_credentials_missing|PLATFORM_|APP_RUNTIME_CLOUD|connection|network|timeout/i.test(message)) {
-      await reschedule(`Instagram indisponível (${message}) — reagendado automaticamente.`);
+    /* Indisponibilidade da plataforma/conector: mantém o conteúdo e reagenda. */
+    if (classify(message) === "transient") {
+      await reschedule(`Instagram/plataforma indisponível (${message}) — reagendado automaticamente.`);
       return json({ state: "rescheduled", published: 0, mode: auth.mode });
     }
 
@@ -305,6 +439,7 @@ Deno.serve(async (req) => {
       .update({
         status: "failed",
         error_message: `${message} · Falha ao publicar — você pode tentar novamente no painel.`,
+        error_history: appendHistory(claimed.error_history, message),
         retry_count: Number(claimed.retry_count ?? 0) + 1,
       })
       .eq("id", claimed.id)

@@ -77,7 +77,8 @@ interface MediaItem {
   url: string;
 }
 
-/* Copy automática por template — nunca inventa serviço, técnica ou condição. */
+/* Copy automática por template — nunca inventa serviço, técnica ou condição,
+   e nunca leva o título técnico do projeto para a legenda pública. */
 const SIGNATURE = "LH Prime — Da primeira ideia à última demão.";
 const LOCATION = "📍 Bom Jesus do Itabapoana e região";
 const SITE = "🌐 www.lhprimepinturas.com.br";
@@ -87,15 +88,8 @@ const CAROUSEL_TAGS =
 const REEL_TAGS =
   "#LHPrime #AcabamentoDeAltoPadrao #PinturaProfissional #ObraFinalizada #PinturaResidencial #BomJesusDoItabapoana";
 
-const headlineOf = (project: ProjectRow): string =>
-  project.category?.trim()
-    ? `${project.title.trim()} · ${project.category.trim()}`
-    : project.title.trim();
-
 const carouselCaption = (project: ProjectRow): string =>
   [
-    headlineOf(project),
-    "",
     "Do antes ao depois: uma transformação que aparece nos detalhes. 🎨✨",
     "",
     "Mais um projeto da LH Prime, com cuidado em cada etapa para entregar um acabamento limpo e um resultado que valorize o ambiente.",
@@ -116,8 +110,6 @@ const carouselCaption = (project: ProjectRow): string =>
 
 const reelCaption = (project: ProjectRow): string =>
   [
-    headlineOf(project),
-    "",
     "Do antes ao depois: uma transformação que aparece nos detalhes. 🎨✨",
     "",
     "Mais um projeto da LH Prime, com cuidado em cada etapa para entregar um acabamento limpo e um resultado que valorize o ambiente.",

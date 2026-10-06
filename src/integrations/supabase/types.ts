@@ -3474,8 +3474,10 @@ export type Database = {
       instagram_queue: {
         Row: {
           caption: string
+          container_ids: Json
           content_type: string
           created_at: string
+          error_history: Json
           error_message: string | null
           id: string
           instagram_media_id: string | null
@@ -3491,8 +3493,10 @@ export type Database = {
         }
         Insert: {
           caption?: string
+          container_ids?: Json
           content_type?: string
           created_at?: string
+          error_history?: Json
           error_message?: string | null
           id?: string
           instagram_media_id?: string | null
@@ -3508,8 +3512,10 @@ export type Database = {
         }
         Update: {
           caption?: string
+          container_ids?: Json
           content_type?: string
           created_at?: string
+          error_history?: Json
           error_message?: string | null
           id?: string
           instagram_media_id?: string | null

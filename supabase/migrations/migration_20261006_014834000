@@ -1,0 +1,9 @@
+-- Rastreio técnico por tentativa (sem mudar a lógica da automação)
+alter table public.instagram_queue add column if not exists container_ids jsonb not null default '[]'::jsonb;
+alter table public.instagram_queue add column if not exists error_history jsonb not null default '[]'::jsonb;
+
+-- Copy oficial: sem título técnico do projeto na legenda
+update public.instagram_queue
+   set caption = regexp_replace(caption, '^[^\n]*\n\n', '')
+ where id = 'ca532156-ec38-4535-b333-fc581aae8aa6'
+   and caption like 'Finalização interna com pintura e acabamento fino%';
