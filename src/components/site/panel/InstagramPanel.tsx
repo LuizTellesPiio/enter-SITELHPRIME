@@ -377,9 +377,15 @@ export const InstagramPanel = () => {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="font-display text-base font-bold text-primary">
-                        {item.source_project_id ? projects[item.source_project_id] ?? "Projeto do portfólio" : "Sem projeto"}
+                        {item.internal_title ??
+                          (item.source_project_id
+                            ? projects[item.source_project_id] ?? "Projeto do portfólio"
+                            : "Sem projeto")}
                       </p>
                       <p className="text-xs text-muted-foreground">
+                        {item.internal_title && item.source_project_id
+                          ? `${projects[item.source_project_id] ?? "Projeto do portfólio"} · `
+                          : ""}
                         {CONTENT_TYPE_LABEL[item.content_type]} · criado em {formatSlot(item.created_at)}
                       </p>
                     </div>

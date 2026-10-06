@@ -27,6 +27,8 @@ export interface InstagramMedia {
 export interface InstagramQueueItem {
   id: string;
   source_project_id: string | null;
+  /** Rótulo interno do painel (ex.: "Primeira publicação — Antes e Depois"). */
+  internal_title: string | null;
   content_type: InstagramContentType;
   caption: string;
   media_urls: InstagramMedia[];

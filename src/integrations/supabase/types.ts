@@ -3479,6 +3479,7 @@ export type Database = {
           error_message: string | null
           id: string
           instagram_media_id: string | null
+          internal_title: string | null
           media_urls: Json
           published_at: string | null
           requires_approval: boolean
@@ -3495,6 +3496,7 @@ export type Database = {
           error_message?: string | null
           id?: string
           instagram_media_id?: string | null
+          internal_title?: string | null
           media_urls?: Json
           published_at?: string | null
           requires_approval?: boolean
@@ -3511,6 +3513,7 @@ export type Database = {
           error_message?: string | null
           id?: string
           instagram_media_id?: string | null
+          internal_title?: string | null
           media_urls?: Json
           published_at?: string | null
           requires_approval?: boolean

@@ -1,0 +1,44 @@
+-- Título interno do conteúdo no painel
+alter table public.instagram_queue add column if not exists internal_title text;
+
+-- Cancela SOMENTE o rascunho do Projeto 01 (nada é apagado do Portfólio)
+update public.instagram_queue q
+   set status = 'cancelled', error_message = null
+ where q.status = 'awaiting_approval'
+   and q.source_project_id in (select p.id from public.portfolio_projects p where p.seq = 1);
+
+-- Primeiro conteúdo oficial: Projeto 02 (escolhido pela análise visual dos vídeos)
+insert into public.instagram_queue (source_project_id, content_type, caption, media_urls, status, requires_approval, scheduled_at, internal_title)
+select
+  p.id,
+  'carousel',
+  $cap$Finalização interna com pintura e acabamento fino
+
+Do antes ao depois: uma transformação que aparece nos detalhes. 🎨✨
+
+Mais um projeto da LH Prime, com cuidado em cada etapa para entregar um acabamento limpo e um resultado que valorize o ambiente.
+
+▶️ Arraste e confira a transformação.
+
+Quer renovar seu espaço também?
+
+📲 Fale com a LH Prime e solicite seu orçamento.
+
+📍 Bom Jesus do Itabapoana e região
+🌐 www.lhprimepinturas.com.br
+
+LH Prime — Da primeira ideia à última demão.
+
+#LHPrime #AntesEDepois #PinturaResidencial #PinturaProfissional #AcabamentoDeAltoPadrao #BomJesusDoItabapoana$cap$,
+  jsonb_build_array(
+    jsonb_build_object('kind', 'antes', 'url', 'https://spb-t4n3l80n68t0ufp3.supabase.opentrust.net/storage/v1/object/public/portfolio-lhprime/' || p.before_path),
+    jsonb_build_object('kind', 'depois', 'url', 'https://spb-t4n3l80n68t0ufp3.supabase.opentrust.net/storage/v1/object/public/portfolio-lhprime/' || p.after_path)
+  ),
+  'awaiting_approval',
+  true,
+  public.instagram_next_slot(),
+  'Primeira publicação — Antes e Depois'
+from public.portfolio_projects p
+where p.seq = 2 and p.type = 'antes-depois' and p.is_active
+  and p.before_path is not null and p.after_path is not null
+on conflict do nothing;

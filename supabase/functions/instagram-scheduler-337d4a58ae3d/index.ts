@@ -84,11 +84,12 @@ const callConnector = async (operationId: string, input: Record<string, unknown>
   return (parsed?.data ?? {}) as Record<string, unknown>;
 };
 
-const resolveIgUserId = async (): Promise<string> => {
+const resolveAccount = async (): Promise<{ id: string; accountType: string | null }> => {
   const info = await callConnector(OP_USER_INFO, { ig_user_id: "me", fields: "id,username,account_type" });
   const id = info?.id ?? info?.user_id;
-  if (typeof id !== "string" || !id) throw new Error("ig_user_not_resolved");
-  return id;
+  if (typeof id !== "string" || !id) throw new Error("ig_user_not_resolved: não foi possível identificar a conta conectada");
+  const accountType = typeof info?.account_type === "string" ? info.account_type : null;
+  return { id, accountType };
 };
 
 const hasPublishingQuota = async (igUserId: string): Promise<boolean> => {
@@ -110,18 +111,53 @@ interface MediaItem {
   url?: string;
 }
 
+/** Preflight antes de publicar: falha aqui não cria nada nem duplica conteúdo. */
+const preflight = async (item: { content_type: string; media_urls: MediaItem[] }): Promise<string> => {
+  const media = (item.media_urls ?? []).filter((entry) => typeof entry?.url === "string" && entry.url);
+  if (media.length === 0) throw new Error("preflight_media_missing: o item não tem mídia válida");
+
+  if (item.content_type === "carousel") {
+    if (media.length < 2 || media.length > 10) {
+      throw new Error(`preflight_media_count: carrossel exige de 2 a 10 itens (atual: ${media.length})`);
+    }
+  } else if (media.length !== 1) {
+    throw new Error(`preflight_media_count: formato ${item.content_type} aceita exatamente 1 mídia (atual: ${media.length})`);
+  }
+
+  for (const entry of media) {
+    const response = await fetch(entry.url as string, { method: "HEAD" });
+    const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
+    const length = Number(response.headers.get("content-length") ?? "0");
+    if (!response.ok) {
+      throw new Error(`preflight_media_unreachable: mídia indisponível (HTTP ${response.status})`);
+    }
+    if (!contentType.startsWith("video/") && !contentType.startsWith("image/")) {
+      throw new Error(`preflight_media_type: formato não suportado (${contentType || "desconhecido"})`);
+    }
+    if (!Number.isFinite(length) || length <= 0) {
+      throw new Error("preflight_media_empty: arquivo de mídia vazio");
+    }
+  }
+
+  const account = await resolveAccount();
+  if (account.accountType && !/BUSINESS|CREATOR|MEDIA_CREATOR/i.test(account.accountType)) {
+    throw new Error(`preflight_account_type: a conta conectada não é Business/Creator (${account.accountType})`);
+  }
+
+  if (!(await hasPublishingQuota(account.id))) {
+    throw new Error("quota_exceeded: cota de publicação do Instagram atingida");
+  }
+
+  return account.id;
+};
+
 const publishToInstagram = async (item: {
   content_type: string;
   caption: string;
   media_urls: MediaItem[];
 }): Promise<string> => {
   const media = (item.media_urls ?? []).filter((entry) => typeof entry?.url === "string" && entry.url);
-  if (media.length === 0) throw new Error("invalid_media: nenhuma mídia válida no item");
-
-  const igUserId = await resolveIgUserId();
-  if (!(await hasPublishingQuota(igUserId))) {
-    throw new Error("quota_exceeded: cota de publicação do Instagram atingida");
-  }
+  const igUserId = await preflight({ content_type: item.content_type, media_urls: item.media_urls });
 
   const createContainer = async (input: Record<string, unknown>): Promise<string> => {
     const created = await callConnector(OP_CREATE_CONTAINER, { ig_user_id: igUserId, ...input });
