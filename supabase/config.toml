@@ -21,6 +21,11 @@ verify_jwt = false
 [functions.instagram-diagnose-337d4a58ae3d]
 verify_jwt = false
 
+# Tentativa final com container já criado (token de ciclo ou admin): uma única
+# chamada de publicação, sem criar containers.
+[functions.instagram-publish-existing-337d4a58ae3d]
+verify_jwt = false
+
 # LH PRIME IA: página pública (sem login) cria a tarefa e consulta o andamento.
 [functions.ai-preview-create]
 verify_jwt = false
