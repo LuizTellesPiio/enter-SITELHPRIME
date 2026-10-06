@@ -1,0 +1,52 @@
+-- 1) Primeiro conteúdo real da fila: CARROSSEL (Antes + Depois) do projeto seq 1.
+insert into public.instagram_queue (source_project_id, content_type, caption, media_urls, status, requires_approval, scheduled_at)
+select
+  p.id,
+  'carousel',
+  $cap$Renovação completa de fachada residencial
+
+Do antes ao acabamento final: é nos detalhes que a transformação aparece. 🎨✨
+
+Mais um projeto da LH Prime, mostrando na prática como um ambiente pode ganhar uma nova aparência com cuidado e atenção ao acabamento.
+
+▶️ Arraste para conferir o antes e o depois.
+
+Quer transformar seu espaço também?
+
+📲 Fale com a LH Prime e solicite seu orçamento.
+
+📍 Bom Jesus do Itabapoana e região
+🌐 www.lhprimepinturas.com.br
+
+LH Prime — Da primeira ideia à última demão.
+
+#LHPrime #AntesEDepois #PinturaResidencial #PinturaProfissional #AcabamentoDeAltoPadrao #BomJesusDoItabapoana$cap$,
+  jsonb_build_array(
+    jsonb_build_object('kind', 'antes', 'url', 'https://spb-t4n3l80n68t0ufp3.supabase.opentrust.net/storage/v1/object/public/portfolio-lhprime/' || p.before_path),
+    jsonb_build_object('kind', 'depois', 'url', 'https://spb-t4n3l80n68t0ufp3.supabase.opentrust.net/storage/v1/object/public/portfolio-lhprime/' || p.after_path)
+  ),
+  'awaiting_approval',
+  true,
+  public.instagram_next_slot()
+from public.portfolio_projects p
+where p.seq = 1 and p.type = 'antes-depois' and p.is_active and p.before_path is not null and p.after_path is not null
+on conflict do nothing;
+
+-- 2) Scheduler nativo do banco: a cada 10 minutos chama a função de processamento
+--    com o token de ciclo lido do próprio banco (nenhum segredo exposto).
+select cron.unschedule(jobid) from cron.job where jobname = 'instagram-auto-publish';
+
+select cron.schedule(
+  'instagram-auto-publish',
+  '*/10 * * * *',
+  $job$
+  select net.http_post(
+    url := 'https://spb-t4n3l80n68t0ufp3.supabase.opentrust.net/functions/v1/instagram-scheduler-337d4a58ae3d',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'x-cycle-token', (select cycle_token::text from public.instagram_settings where id)
+    ),
+    body := '{}'::jsonb
+  );
+  $job$
+);

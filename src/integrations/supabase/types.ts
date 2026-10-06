@@ -3471,6 +3471,100 @@ export type Database = {
         }
         Relationships: []
       }
+      instagram_queue: {
+        Row: {
+          caption: string
+          content_type: string
+          created_at: string
+          error_message: string | null
+          id: string
+          instagram_media_id: string | null
+          media_urls: Json
+          published_at: string | null
+          requires_approval: boolean
+          retry_count: number
+          scheduled_at: string | null
+          source_project_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          caption?: string
+          content_type?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          instagram_media_id?: string | null
+          media_urls?: Json
+          published_at?: string | null
+          requires_approval?: boolean
+          retry_count?: number
+          scheduled_at?: string | null
+          source_project_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          caption?: string
+          content_type?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          instagram_media_id?: string | null
+          media_urls?: Json
+          published_at?: string | null
+          requires_approval?: boolean
+          retry_count?: number
+          scheduled_at?: string | null
+          source_project_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "instagram_queue_source_project_id_fkey"
+            columns: ["source_project_id"]
+            referencedRelation: "portfolio_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      instagram_settings: {
+        Row: {
+          cycle_token: string
+          id: boolean
+          max_per_week: number
+          min_gap_hours: number
+          mode: string
+          post_time: string
+          timezone: string
+          updated_at: string
+          weekdays: number[]
+        }
+        Insert: {
+          cycle_token?: string
+          id?: boolean
+          max_per_week?: number
+          min_gap_hours?: number
+          mode?: string
+          post_time?: string
+          timezone?: string
+          updated_at?: string
+          weekdays?: number[]
+        }
+        Update: {
+          cycle_token?: string
+          id?: boolean
+          max_per_week?: number
+          min_gap_hours?: number
+          mode?: string
+          post_time?: string
+          timezone?: string
+          updated_at?: string
+          weekdays?: number[]
+        }
+        Relationships: []
+      }
       participations: {
         Row: {
           admin_notes: string
@@ -3890,6 +3984,10 @@ export type Database = {
       }
       deliver_participation: {
         Args: { p_code: string }
+        Returns: string
+      }
+      instagram_next_slot: {
+        Args: { p_from?: string }
         Returns: string
       }
       is_admin: {

@@ -12,6 +12,11 @@ verify_jwt = false
 [functions.campaign-prizes]
 verify_jwt = false
 
+# Instagram: o scheduler nativo do banco chama esta função sem sessão de usuário.
+# O próprio código autoriza pelo token de ciclo (ou por um admin logado no painel).
+[functions.instagram-scheduler-337d4a58ae3d]
+verify_jwt = false
+
 # LH PRIME IA: página pública (sem login) cria a tarefa e consulta o andamento.
 [functions.ai-preview-create]
 verify_jwt = false

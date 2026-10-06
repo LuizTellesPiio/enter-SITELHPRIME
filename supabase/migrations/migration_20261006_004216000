@@ -1,0 +1,114 @@
+-- Módulo Instagram: fila de conteúdo + configuração. Nada existente é alterado.
+create table if not exists public.instagram_queue (
+  id uuid primary key default gen_random_uuid(),
+  source_project_id uuid references public.portfolio_projects(id) on delete set null,
+  content_type text not null default 'carousel',
+  caption text not null default '',
+  media_urls jsonb not null default '[]'::jsonb,
+  scheduled_at timestamptz,
+  status text not null default 'awaiting_approval',
+  requires_approval boolean not null default true,
+  published_at timestamptz,
+  instagram_media_id text,
+  error_message text,
+  retry_count integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint instagram_queue_status_check check (status in ('awaiting_approval','scheduled','publishing','published','failed','cancelled')),
+  constraint instagram_queue_type_check check (content_type in ('carousel','reel','story','image')),
+  constraint instagram_queue_retry_check check (retry_count >= 0)
+);
+
+comment on table public.instagram_queue is 'Fila de conteúdo do Instagram — Portfólio LH Prime (aprovação/agendamento/publicação).';
+
+-- Um conteúdo ativo por projeto (proteção contra duplicidade).
+create unique index if not exists instagram_queue_active_project_unique
+  on public.instagram_queue (source_project_id)
+  where status in ('awaiting_approval','scheduled','publishing','published') and source_project_id is not null;
+
+create table if not exists public.instagram_settings (
+  id boolean primary key default true,
+  mode text not null default 'approval',
+  weekdays integer[] not null default '{2,4}',
+  post_time time not null default '19:30',
+  timezone text not null default 'America/Sao_Paulo',
+  min_gap_hours integer not null default 48,
+  max_per_week integer not null default 2,
+  cycle_token uuid not null default gen_random_uuid(),
+  updated_at timestamptz not null default now(),
+  constraint instagram_settings_singleton check (id),
+  constraint instagram_settings_mode_check check (mode in ('approval','auto')),
+  constraint instagram_settings_gap_check check (min_gap_hours >= 0 and max_per_week >= 1)
+);
+
+insert into public.instagram_settings (id) values (true) on conflict (id) do nothing;
+
+alter table public.instagram_queue enable row level security;
+alter table public.instagram_settings enable row level security;
+
+create policy instagram_queue_admin_all on public.instagram_queue
+  for all using (public.is_admin()) with check (public.is_admin());
+create policy instagram_settings_admin_all on public.instagram_settings
+  for all using (public.is_admin()) with check (public.is_admin());
+
+revoke all on public.instagram_queue from anon;
+revoke all on public.instagram_settings from anon;
+grant select, insert, update, delete on public.instagram_queue to authenticated, service_role;
+grant select, insert, update, delete on public.instagram_settings to authenticated, service_role;
+
+create trigger instagram_queue_touch_updated_at before update on public.instagram_queue
+  for each row execute function public.set_updated_at();
+create trigger instagram_settings_touch_updated_at before update on public.instagram_settings
+  for each row execute function public.set_updated_at();
+
+-- Próximo horário válido: dia permitido, horário configurado e sem exceder
+-- o máximo por semana nem o intervalo mínimo entre conteúdos automáticos.
+create or replace function public.instagram_next_slot(p_from timestamptz default now())
+returns timestamptz
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  s public.instagram_settings%rowtype;
+  v_last timestamptz;
+  v_min timestamptz;
+  v_day date;
+  v_candidate timestamptz;
+  v_count integer;
+  i integer;
+begin
+  select * into s from public.instagram_settings where id;
+  if s.id is null then
+    return p_from + interval '1 day';
+  end if;
+
+  select max(coalesce(q.published_at, q.scheduled_at)) into v_last
+    from public.instagram_queue q
+   where q.status in ('published','scheduled','publishing');
+
+  v_min := greatest(p_from, coalesce(v_last, p_from) + make_interval(hours => s.min_gap_hours));
+
+  for i in 0..20 loop
+    v_day := (v_min at time zone s.timezone)::date + i;
+    if extract(dow from v_day)::integer = any (s.weekdays) then
+      v_candidate := (v_day + s.post_time) at time zone s.timezone;
+      if v_candidate > p_from and v_candidate >= v_min then
+        select count(*) into v_count
+          from public.instagram_queue q
+         where q.status in ('published','scheduled','publishing')
+           and date_trunc('week', (coalesce(q.published_at, q.scheduled_at) at time zone s.timezone)::date)
+             = date_trunc('week', v_day);
+        if v_count < s.max_per_week then
+          return v_candidate;
+        end if;
+      end if;
+    end if;
+  end loop;
+
+  return v_min + interval '2 days';
+end;
+$$;
+
+revoke all on function public.instagram_next_slot(timestamptz) from public, anon, authenticated;
+grant execute on function public.instagram_next_slot(timestamptz) to service_role;

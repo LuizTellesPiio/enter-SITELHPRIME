@@ -3,6 +3,7 @@ import {
   FileText,
   Film,
   HardHat,
+  Instagram,
   Settings,
   Ticket,
   Trophy,
@@ -89,11 +90,12 @@ export interface PanelModule<K extends string = string> {
 }
 
 /** Módulos ativos hoje na navegação do painel. */
-export type ActivePanelModuleKey = "cliente-premiado" | "portfolio" | "precificacao";
+export type ActivePanelModuleKey = "cliente-premiado" | "portfolio" | "instagram" | "precificacao";
 
 export const ACTIVE_PANEL_MODULES: readonly PanelModule<ActivePanelModuleKey>[] = [
   { key: "cliente-premiado", label: "Cliente Premiado", icon: Ticket },
   { key: "portfolio", label: "Portfólio", icon: Film },
+  { key: "instagram", label: "Instagram", icon: Instagram },
   { key: "precificacao", label: "Diária & Precificação", icon: Calculator },
 ];
 

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { PainelAuth } from "@/components/site/panel/PainelAuth";
 import { PainelHeader } from "@/components/site/panel/PainelHeader";
 import { PanelTabs } from "@/components/site/panel/PanelTabs";
+import { InstagramPanel } from "@/components/site/panel/InstagramPanel";
 import { ParticipacoesPanel } from "@/components/site/panel/ParticipacoesPanel";
 import { PremiosPanel } from "@/components/site/panel/PremiosPanel";
 import { PortfolioPanel } from "@/components/site/panel/PortfolioPanel";
@@ -128,6 +129,8 @@ const Painel = () => {
         return section === "participacoes" ? <ParticipacoesPanel /> : <PremiosPanel />;
       case "portfolio":
         return <PortfolioPanel />;
+      case "instagram":
+        return <InstagramPanel />;
       case "precificacao":
         return <PricingPanel />;
       default:
