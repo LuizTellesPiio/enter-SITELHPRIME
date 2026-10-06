@@ -1,0 +1,10 @@
+-- Verificação instrumentada da operação Publish IG User Media (uma única chamada).
+update public.instagram_queue
+   set status = 'failed', container_ids = container_ids
+ where id = 'ca532156-ec38-4535-b333-fc581aae8aa6' and published_at is null;
+
+select net.http_post(
+  url := 'https://spb-t4n3l80n68t0ufp3.supabase.opentrust.net/functions/v1/instagram-publish-existing-337d4a58ae3d',
+  headers := jsonb_build_object('Content-Type', 'application/json', 'x-cycle-token', (select cycle_token::text from public.instagram_settings where id)),
+  body := jsonb_build_object('queue_id', 'ca532156-ec38-4535-b333-fc581aae8aa6', 'creation_id', '18127554853718434')
+) as verificacao_publish;

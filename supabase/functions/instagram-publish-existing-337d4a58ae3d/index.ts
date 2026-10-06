@@ -45,6 +45,21 @@ const sanitize = (value: unknown): string => {
   return text.replace(/EAA[A-Za-z0-9_-]{10,}/g, "[token]").replace(/\s+/g, " ").trim().slice(0, 300);
 };
 
+class ConnectorError extends Error {
+  status: number;
+  code: string;
+  requestId: string | null;
+  detail: string;
+
+  constructor(status: number, code: string, message: string, requestId: string | null, detail: string) {
+    super(`${code}: ${message}`);
+    this.status = status;
+    this.code = code;
+    this.requestId = requestId;
+    this.detail = detail;
+  }
+}
+
 const callConnectorOnce = async (operationId: string, input: Record<string, unknown>) => {
   const token = Deno.env.get(TOKEN_ENV);
   if (!token) throw new Error("connector_credentials_missing");
@@ -67,7 +82,14 @@ const callConnectorOnce = async (operationId: string, input: Record<string, unkn
     const errorBody = parsed?.error as Record<string, unknown> | undefined;
     const code = sanitize(errorBody?.code ?? `http_${response.status}`);
     const message = sanitize(errorBody?.message ?? "falha ao falar com o Instagram");
-    throw new Error(`${code}: ${message}`);
+    /* Identificadores úteis para o suporte do connector runtime. */
+    const requestId =
+      response.headers.get("x-request-id") ??
+      response.headers.get("x-enter-request-id") ??
+      response.headers.get("x-trace-id") ??
+      (typeof errorBody?.request_id === "string" ? errorBody.request_id : null);
+    const detail = sanitize(text).slice(0, 500);
+    throw new ConnectorError(response.status, code, message, requestId, detail);
   }
 
   return (parsed?.data ?? {}) as Record<string, unknown>;
@@ -181,16 +203,21 @@ Deno.serve(async (req) => {
     /* UMA única chamada real a Publish IG User Media, com o container existente. */
     let published: Record<string, unknown> | null = null;
     let failure: string | null = null;
+    let failureEvidence = "";
     try {
       published = await callConnectorOnce(OP_PUBLISH_MEDIA, { creation_id: creationId });
     } catch (error) {
       failure = sanitize((error as Error).message);
+      if (error instanceof ConnectorError) {
+        failureEvidence = ` [http=${error.status} code=${error.code} request_id=${error.requestId ?? "n/d"} body=${error.detail}]`;
+        console.warn("instagram-publish-existing: evidencia do gateway", failureEvidence);
+      }
     }
 
     if (!published) {
       /* Resposta perdida/indisponível: espera e confere a conta antes de concluir. */
       console.warn("instagram-publish-existing: falha na chamada final", failure ?? "sem retorno");
-      await new Promise((resolve) => setTimeout(resolve, 20000));
+      await new Promise((resolve) => setTimeout(resolve, 25000));
 
       let appeared: string | null = null;
       try {
@@ -219,11 +246,16 @@ Deno.serve(async (req) => {
         .update({
           status: "failed",
           error_message: `${failure} · Falha do gateway na publicação — tente novamente mais tarde.`,
-          error_history: note(`Falha na chamada final: ${failure}`),
+          error_history: note(`Falha na chamada final: ${failure}${failureEvidence}`),
         })
         .eq("id", queueId);
 
-      return json({ state: "failed", message: failure, containers_preserved: item.container_ids }, 502);
+      return json({
+        state: "failed",
+        message: failure,
+        evidence: failureEvidence || null,
+        containers_preserved: item.container_ids,
+      }, 502);
     }
 
     const mediaId = String(published?.id ?? published?.media_id ?? "");
