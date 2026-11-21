@@ -14,6 +14,9 @@ export const INSTAGRAM_HANDLE = "@luuiiztellespio";
 export const INSTAGRAM_URL = "https://www.instagram.com/luuiiztellespio/";
 export const CITY = "Bom Jesus do Itabapoana - RJ e região";
 
+/** Link compartilhado do perfil da LH Prime no Google (abre em nova aba). */
+export const GOOGLE_REVIEW_URL = "https://share.google/pbGSRx1KuJDiDc03s";
+
 export interface Service {
   title: string;
   description: string;

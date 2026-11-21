@@ -1,6 +1,6 @@
-import { Instagram, MapPin, MessageCircle } from "lucide-react";
+import { Instagram, MapPin, MessageCircle, Star } from "lucide-react";
 import { Link } from "react-router-dom";
-import { NAV_LINKS, INSTAGRAM_URL, CITY } from "@/data/site";
+import { NAV_LINKS, INSTAGRAM_URL, CITY, GOOGLE_REVIEW_URL } from "@/data/site";
 import { DEFAULT_WHATSAPP_LINK, WHATSAPP_DISPLAY } from "@/lib/whatsapp";
 import { BrandLogo } from "@/components/site/BrandLogo";
 import { BRAND } from "@/lib/brand";
@@ -70,6 +70,15 @@ export const Footer = () => {
             >
               <Instagram className="size-4 text-emerald" />
               @luuiiztellespio
+            </a>
+            <a
+              href={GOOGLE_REVIEW_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="flex w-fit items-center gap-2 text-sm text-on-dark-muted transition-colors hover:text-white"
+            >
+              <Star className="size-4 text-emerald" />
+              Avalie-nos no Google
             </a>
             <p className="flex items-center gap-2 text-sm text-on-dark-muted">
               <MapPin className="size-4 shrink-0 text-emerald" />
