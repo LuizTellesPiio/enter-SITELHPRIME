@@ -1,6 +1,6 @@
 import { Check, MapPin, MessageCircle, Paintbrush } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ImagePlaceholder } from "./ImagePlaceholder";
+import { GoogleReviewCard } from "./GoogleReviewCard";
 import { CITY, DIFFERENTIALS } from "@/data/site";
 import { DEFAULT_WHATSAPP_LINK } from "@/lib/whatsapp";
 
@@ -51,16 +51,11 @@ export const Hero = () => {
           </div>
         </div>
 
-        {/* Right column — real photo slot */}
+        {/* Right column — card de avaliações do Google */}
         <div className="relative">
           <div className="absolute -inset-3 rounded-[2rem] bg-gradient-to-br from-emerald/25 to-[#7C5CFF]/25 blur-2xl" />
           <div className="relative rounded-[2rem] border border-white/10 bg-white/5 p-3 backdrop-blur-sm">
-            <ImagePlaceholder
-              ratio="4:3"
-              rounded="2xl"
-              label="Espaço reservado para a foto do ambiente em destaque"
-              className="border-white/15 from-white/10 via-white/5 to-transparent hover:border-white/25"
-            />
+            <GoogleReviewCard />
           </div>
         </div>
       </div>

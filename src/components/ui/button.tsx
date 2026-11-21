@@ -24,6 +24,8 @@ const buttonVariants = cva(
           "border border-white/30 bg-white/10 text-white backdrop-blur-sm hover:bg-white/20",
         "light-outline":
           "border border-primary/20 bg-card text-primary hover:border-primary/40 hover:bg-secondary",
+        "on-dark":
+          "bg-primary-foreground text-primary shadow-elegant hover:bg-primary-foreground/90",
       },
       size: {
         default: "h-10 px-4 py-2",

@@ -10,7 +10,6 @@ import { Process } from "@/components/site/Process";
 import { Testimonials } from "@/components/site/Testimonials";
 import { ServiceArea } from "@/components/site/ServiceArea";
 import { Faq } from "@/components/site/Faq";
-import { GoogleReviews } from "@/components/site/GoogleReviews";
 import { Contact } from "@/components/site/Contact";
 import { Footer } from "@/components/site/Footer";
 import { FloatingWhatsApp } from "@/components/site/FloatingWhatsApp";
@@ -31,7 +30,6 @@ const Index = () => {
         <Testimonials />
         <ServiceArea />
         <Faq />
-        <GoogleReviews />
         <Contact />
       </main>
       <Footer />
