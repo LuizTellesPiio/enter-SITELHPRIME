@@ -6,7 +6,7 @@ import { GOOGLE_PROFILE_URL } from "@/data/site";
 /** Card de avaliações exibido na primeira tela (lado direito do Hero). */
 export const GoogleReviewCard = () => {
   return (
-    <div className="flex h-full flex-col justify-between gap-6 rounded-2xl border border-white/10 bg-primary/40 p-6 backdrop-blur-sm sm:p-8 lg:aspect-[4/3]">
+    <div className="flex h-full flex-col justify-between gap-6 rounded-2xl border border-white/10 bg-primary/40 p-6 backdrop-blur-sm sm:p-8 lg:min-h-[27rem]">
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-3">
           <GoogleMark />
@@ -24,13 +24,19 @@ export const GoogleReviewCard = () => {
         </div>
 
         <h2 className="font-display text-2xl font-bold leading-snug text-white sm:text-[1.7rem]">
-          A confiança de quem já contratou a LH Prime.
+          Pintura que transforma. Confiança que permanece.
         </h2>
 
-        <p className="text-sm leading-relaxed text-on-dark-muted sm:text-base">
-          Os comentários ficam no perfil da LH Prime no Google. Abra para ler as
-          avaliações dos clientes ou deixar a sua.
-        </p>
+        <div className="flex flex-col gap-2 text-sm leading-relaxed text-on-dark-muted sm:text-base">
+          <p>
+            Cada projeto carrega nosso compromisso com a qualidade, o cuidado e
+            a atenção aos detalhes.
+          </p>
+          <p>
+            Conheça as avaliações da LH Prime no Google. E, se já fizemos parte
+            da transformação do seu espaço, compartilhe sua experiência!
+          </p>
+        </div>
       </div>
 
       <div className="flex flex-col items-start gap-3">
@@ -47,7 +53,7 @@ export const GoogleReviewCard = () => {
             rel="noopener noreferrer"
           >
             <Star className="size-4 fill-current" />
-            Avaliar a LH Prime no Google
+            Avaliar no Google
           </a>
         </Button>
         <a
@@ -56,7 +62,7 @@ export const GoogleReviewCard = () => {
           rel="noopener noreferrer"
           className="inline-flex w-fit items-center gap-1.5 text-sm font-semibold text-emerald underline-offset-4 transition-colors hover:text-white hover:underline"
         >
-          Ver avaliações dos clientes
+          Ver avaliações no Google
           <ArrowRight className="size-4" />
         </a>
       </div>
